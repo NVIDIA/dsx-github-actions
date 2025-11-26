@@ -48,4 +48,5 @@ else
 fi
 
 log_info "NGC CLI installed at $install_root/ngc"
+ln -s "$install_root/ngc" /usr/local/bin/ngc
 ngc --version
