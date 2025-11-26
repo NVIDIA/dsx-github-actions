@@ -1,0 +1,106 @@
+name: "Resource Push to NGC"
+description: "Composite action that publishes a resource into the NVIDIA GPU Cloud registry"
+author: "CDS Platform"
+inputs:
+  job-name:
+    description: "Job name reference, kept for compatibility"
+    default: "resource-push-ngc"
+    required: false
+  application:
+    description: "Resource application category"
+    default: "OTHER"
+    required: false
+  description:
+    description: "Resource short description"
+    default: ""
+    required: false
+  display-name:
+    description: "Resource display name"
+    default: ""
+    required: false
+  format:
+    description: "Resource format"
+    default: "generic"
+    required: false
+  framework:
+    description: "Resource framework"
+    default: "Other"
+    required: false
+  name:
+    description: "Resource name"
+    required: true
+  ngc-force:
+    description: "Behavior when the version already exists: overwrite | skip | fail"
+    default: "skip"
+    required: false
+  ngc-key:
+    description: "NGC API key"
+    required: true
+  ngc-path:
+    description: "NGC org/team path (org/team)"
+    required: true
+  path:
+    description: "File or directory to upload"
+    required: true
+  precision:
+    description: "Resource precision"
+    default: "OTHER"
+    required: false
+  version:
+    description: "Resource version"
+    required: true
+outputs:
+  resource-id:
+    description: "Fully qualified resource identifier"
+    value: ${{ steps.push.outputs.resource-id }}
+  upload-status:
+    description: "Result of the upload operation"
+    value: ${{ steps.push.outputs.upload-status }}
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare scripts
+      shell: bash
+      run: |
+        chmod +x "$GITHUB_ACTION_PATH"/scripts/*.sh
+    - name: Install NGC CLI
+      shell: bash
+      run: |
+        "$GITHUB_ACTION_PATH"/scripts/install-ngc-cli.sh
+    - name: Validate inputs
+      shell: bash
+      run: |
+        "$GITHUB_ACTION_PATH"/scripts/validate-inputs.sh
+      env:
+        INPUT_JOB_NAME: ${{ inputs.job-name }}
+        INPUT_APPLICATION: ${{ inputs.application }}
+        INPUT_DESCRIPTION: ${{ inputs.description }}
+        INPUT_DISPLAY_NAME: ${{ inputs.display-name }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_FRAMEWORK: ${{ inputs.framework }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_NGC_FORCE: ${{ inputs.ngc-force }}
+        INPUT_NGC_KEY: ${{ inputs.ngc-key }}
+        INPUT_NGC_PATH: ${{ inputs.ngc-path }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_PRECISION: ${{ inputs.precision }}
+        INPUT_VERSION: ${{ inputs.version }}
+    - name: Push resource to NGC
+      id: push
+      shell: bash
+      env:
+        PUSH_RESULT_FILE: ${{ runner.temp }}/ngc-push-result
+      run: |
+        set +e
+        "$GITHUB_ACTION_PATH"/scripts/push-to-ngc.sh
+        status=$?
+        set -e
+        if [[ -f "$PUSH_RESULT_FILE" ]]; then
+          cat "$PUSH_RESULT_FILE" >> "$GITHUB_OUTPUT"
+        fi
+        if [[ $status -eq 66 ]]; then
+          echo "NGC upload skipped (resource exists and ngc-force=skip)."
+          exit 0
+        elif [[ $status -ne 0 ]]; then
+          exit $status
+        fi
