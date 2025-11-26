@@ -15,8 +15,8 @@ if command -v ngc >/dev/null 2>&1; then
   exit 0
 fi
 
-download_url="https://download.nvidia.com/ngc/ngccli_linux.zip"
-
+NGCCLI_VERSION="4.9.17"
+download_url=""https://api.ngc.nvidia.com/v2/resources/nvidia/ngc-apps/ngc_cli/versions/${NGCCLI_VERSION}/files/ngccli_linux.zip"
 work_dir=$(mktemp -d)
 trap 'rm -rf "$work_dir"' EXIT
 
