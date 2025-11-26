@@ -30,16 +30,17 @@ if [[ -z "$extract_dir" ]]; then
   exit 1
 fi
 
-bin_path=$(find "$extract_dir" -maxdepth 2 -type f -name 'ngc*' | head -n 1)
-if [[ -z "$bin_path" ]]; then
-  log_error "Unable to find ngc executable"
+install_root="$HOME/.local/ngc-cli"
+rm -rf "$install_root"
+mkdir -p "$install_root"
+cp -R "$extract_dir"/. "$install_root/"
+
+bin_path="$install_root/ngc"
+if [[ ! -f "$bin_path" ]]; then
+  log_error "Unable to find ngc executable after installation"
   exit 1
 fi
-
-install_root="$HOME/.local/bin"
-mkdir -p "$install_root"
-cp "$bin_path" "$install_root/ngc"
-chmod +x "$install_root/ngc"
+chmod +x "$bin_path"
 
 if [[ -n "${GITHUB_PATH:-}" ]]; then
   echo "$install_root" >> "$GITHUB_PATH"
@@ -50,10 +51,10 @@ fi
 log_info "NGC CLI installed at $install_root/ngc"
 
 if [[ -d /usr/local/bin && -w /usr/local/bin ]]; then
-  ln -sf "$install_root/ngc" /usr/local/bin/ngc
+  ln -sf "$bin_path" /usr/local/bin/ngc
   log_info "Symlinked ngc into /usr/local/bin"
 else
   log_warn "Skipping symlink into /usr/local/bin (directory not writable); PATH updated via GITHUB_PATH."
 fi
 
-"$install_root/ngc" --version
+"$bin_path" --version
