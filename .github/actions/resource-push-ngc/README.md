@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Upload resource
-        uses: ./github-actions/resource-push-ngc
+        uses: NVIDIA/dsx-github-actions/.github/actions/resource-push-ngc@main
         with:
           name: my-model
           display-name: My Model
@@ -29,6 +29,7 @@ jobs:
           ngc-path: myorg/myteam
           ngc-key: ${{ secrets.NGC_API_KEY }}
           ngc-force: overwrite
+          ngccli-version: 4.9.17
 ```
 
 ## Inputs
@@ -48,6 +49,7 @@ jobs:
 | `path` | Yes | — | File or directory to upload |
 | `precision` | No | `OTHER` | Resource precision |
 | `version` | Yes | — | Resource version |
+| `ngccli-version` | No | `4.9.17` | NGC CLI version to install |
 
 ## Outputs
 
