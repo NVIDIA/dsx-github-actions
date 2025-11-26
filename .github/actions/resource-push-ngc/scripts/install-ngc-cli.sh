@@ -48,5 +48,12 @@ else
 fi
 
 log_info "NGC CLI installed at $install_root/ngc"
-ln -s "$install_root/ngc" /usr/local/bin/ngc
-ngc --version
+
+if [[ -d /usr/local/bin && -w /usr/local/bin ]]; then
+  ln -sf "$install_root/ngc" /usr/local/bin/ngc
+  log_info "Symlinked ngc into /usr/local/bin"
+else
+  log_warn "Skipping symlink into /usr/local/bin (directory not writable); PATH updated via GITHUB_PATH."
+fi
+
+"$install_root/ngc" --version
