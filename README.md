@@ -7,8 +7,9 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | Action                                                  | Description                       | Use Case                          |
 | ------------------------------------------------------- | --------------------------------- | --------------------------------- |
 | [codeql-scan](.github/actions/codeql-scan/)             | Static code analysis with CodeQL  | Security vulnerability detection  |
-| [trivy-scan](.github/actions/trivy-scan/)                 | Vulnerability scanning with Trivy | Dependency and container scanning |
+| [trivy-scan](.github/actions/trivy-scan/)               | Vulnerability scanning with Trivy | Dependency and container scanning |
 | [trufflehog-scan](.github/actions/trufflehog-scan/)     | Secret scanning with TruffleHog   | Leaked credentials detection      |
+| [semantic-release](.github/actions/semantic-release/)   | Automated versioning and releases | Semantic versioning and changelog |
 | [resource-push-ngc](.github/actions/resource-push-ngc/) | Push resources to NGC             | Artifact publishing               |
 
 ## ⚠️ Important: GitHub Advanced Security Required
@@ -82,8 +83,9 @@ jobs:
 ## 📚 Documentation
 
 - [CodeQL Scan Action](.github/actions/codeql-scan/README.md)
-- [Vulnerability Scan Action](.github/actions/trivy-scan/README.md)
+- [Trivy Scan Action](.github/actions/trivy-scan/README.md)
 - [TruffleHog Secret Scan Action](.github/actions/trufflehog-scan/README.md)
+- [Semantic Release Action](.github/actions/semantic-release/README.md)
 - [Resource Push NGC Action](.github/actions/resource-push-ngc/README.md)
 - [Workflows Guide](.github/workflows/README.md)
 
@@ -186,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required for TruffleHog
+          fetch-depth: 0 # Required for TruffleHog
 
       # Secret scanning
       - uses: NVIDIA/dsx-github-actions/.github/actions/trufflehog-scan@main
@@ -279,8 +281,9 @@ jobs:
 .github/
 ├── actions/
 │   ├── codeql-scan/        # Static code analysis (CodeQL)
-│   ├── trivy-scan/          # Vulnerability scanning (Trivy)
+│   ├── trivy-scan/         # Vulnerability scanning (Trivy)
 │   ├── trufflehog-scan/    # Secret scanning (TruffleHog)
+│   ├── semantic-release/   # Automated versioning and releases
 │   └── resource-push-ngc/  # NGC publishing
 └── workflows/
     ├── release.yml         # Automatic semantic versioning

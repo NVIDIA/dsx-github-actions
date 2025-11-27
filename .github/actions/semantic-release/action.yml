@@ -1,0 +1,129 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'Semantic Release'
+description: 'Automated versioning and package publishing using semantic-release'
+
+inputs:
+  semantic-version:
+    description: 'Semantic-release version to use (e.g., 24.2.0)'
+    required: false
+    default: ''
+  extra-plugins:
+    description: 'Extra plugins to install (one per line, e.g., @semantic-release/changelog@7.0.0)'
+    required: false
+    default: ''
+  dry-run:
+    description: 'Run in dry-run mode (no releases created)'
+    required: false
+    default: 'false'
+  branches:
+    description: 'Branches configuration (JSON array or string, e.g., ["main", "next"])'
+    required: false
+    default: ''
+  tag-format:
+    description: 'Git tag format (e.g., v${version} or custom-v${version})'
+    required: false
+    default: ''
+  extends:
+    description: 'Shareable configurations to extend (one per line)'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for semantic-release'
+    required: false
+    default: '.'
+  ci:
+    description: 'Run with CI support'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'GitHub token for creating releases'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  new-release-published:
+    description: 'Whether a new release was published (true or false)'
+    value: ${{ steps.semantic.outputs.new_release_published }}
+  new-release-version:
+    description: 'Version of the new release (e.g., 1.3.0)'
+    value: ${{ steps.semantic.outputs.new_release_version }}
+  new-release-major-version:
+    description: 'Major version of the new release (e.g., 1)'
+    value: ${{ steps.semantic.outputs.new_release_major_version }}
+  new-release-minor-version:
+    description: 'Minor version of the new release (e.g., 3)'
+    value: ${{ steps.semantic.outputs.new_release_minor_version }}
+  new-release-patch-version:
+    description: 'Patch version of the new release (e.g., 0)'
+    value: ${{ steps.semantic.outputs.new_release_patch_version }}
+  new-release-channel:
+    description: 'Distribution channel of the new release'
+    value: ${{ steps.semantic.outputs.new_release_channel }}
+  new-release-notes:
+    description: 'Release notes for the new release'
+    value: ${{ steps.semantic.outputs.new_release_notes }}
+  new-release-git-head:
+    description: 'Git SHA of the last commit in the new release'
+    value: ${{ steps.semantic.outputs.new_release_git_head }}
+  new-release-git-tag:
+    description: 'Git tag of the new release'
+    value: ${{ steps.semantic.outputs.new_release_git_tag }}
+  last-release-version:
+    description: 'Version of the previous release'
+    value: ${{ steps.semantic.outputs.last_release_version }}
+  last-release-git-head:
+    description: 'Git SHA of the last commit in the previous release'
+    value: ${{ steps.semantic.outputs.last_release_git_head }}
+  last-release-git-tag:
+    description: 'Git tag of the previous release'
+    value: ${{ steps.semantic.outputs.last_release_git_tag }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Semantic Release
+      id: semantic
+      uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
+      with:
+        semantic_version: ${{ inputs.semantic-version }}
+        extra_plugins: ${{ inputs.extra-plugins }}
+        dry_run: ${{ inputs.dry-run }}
+        branches: ${{ inputs.branches }}
+        tag_format: ${{ inputs.tag-format }}
+        extends: ${{ inputs.extends }}
+        working_directory: ${{ inputs.working-directory }}
+        ci: ${{ inputs.ci }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Display Release Info
+      if: steps.semantic.outputs.new_release_published == 'true'
+      shell: bash
+      run: |
+        echo "🎉 New Release Published!"
+        echo "📦 Version: ${{ steps.semantic.outputs.new_release_version }}"
+        echo "🏷️ Tag: ${{ steps.semantic.outputs.new_release_git_tag }}"
+        echo "📝 Release Notes:"
+        echo "${{ steps.semantic.outputs.new_release_notes }}"
+
+    - name: No Release Info
+      if: steps.semantic.outputs.new_release_published != 'true'
+      shell: bash
+      run: |
+        echo "ℹ️ No new release created"
+        if [ -n "${{ steps.semantic.outputs.last_release_version }}" ]; then
+          echo "📌 Last release: ${{ steps.semantic.outputs.last_release_version }}"
+        fi
