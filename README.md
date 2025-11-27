@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   security:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     steps:
       - uses: actions/checkout@v4
 
@@ -107,7 +107,18 @@ This repository uses **automatic semantic versioning**. Tags are automatically c
 
 ### Recommended Approaches
 
-#### 1. Pin to Specific Version (Recommended for Production)
+#### 1. Pin to Specific Commit SHA (Recommended by NVIDIA Security Guidence)
+
+Maximum stability and security - the target action never changes:
+
+```yaml
+uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@55d1e0af17fb4431edaca19fbd5c78fecd29d18a
+```
+
+✅ **Best for**: Production, CI/CD pipelines
+⚠️ **Note**: Won't receive bug fixes or new f
+
+#### 2. Pin to Specific Version
 
 Maximum stability - version never changes:
 
@@ -118,7 +129,7 @@ uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@v1.2.3
 ✅ **Best for**: Production, CI/CD pipelines
 ⚠️ **Note**: Won't receive bug fixes or new features automatically
 
-#### 2. Pin to Major Version (Balanced)
+#### 3. Pin to Major Version
 
 Get patches and features, avoid breaking changes:
 
@@ -130,7 +141,7 @@ uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@v1
 📦 **Updates**: Automatically gets `v1.x.x` updates
 🛡️ **Safety**: Won't update to `v2.0.0` (breaking changes)
 
-#### 3. Use Latest Main (Development Only)
+#### 4. Use Latest Main
 
 Always use latest code:
 
@@ -184,25 +195,25 @@ permissions:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Required for TruffleHog
 
       # Secret scanning
-      - uses: NVIDIA/dsx-github-actions/.github/actions/trufflehog-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trufflehog-scan@55d1e0af17fb4431edaca19fbd5c78fecd29d18a
         with:
           post-pr-comment: "true"
 
       # Code analysis
-      - uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@55d1e0af17fb4431edaca19fbd5c78fecd29d18a
         with:
           languages: "go"
           post-pr-comment: "true"
 
       # Vulnerability scanning
-      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@55d1e0af17fb4431edaca19fbd5c78fecd29d18a
         with:
           post-pr-comment: "true"
 ```
@@ -225,7 +236,7 @@ jobs:
           build-command: "cargo build --workspace"
 
   trivy-scan:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       security-events: write
       contents: read
@@ -239,7 +250,7 @@ jobs:
 ```yaml
 jobs:
   build-and-scan:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       contents: read
       security-events: write

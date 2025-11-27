@@ -31,7 +31,7 @@ TruffleHog scans **git commit history** for:
 ```yaml
 jobs:
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +51,7 @@ on:
 
 jobs:
   trufflehog:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read # For direct job URL links
       contents: read
@@ -77,7 +77,7 @@ on:
 
 jobs:
   trufflehog:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -301,7 +301,7 @@ on: [push, pull_request]
 
 jobs:
   secrets:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -320,7 +320,7 @@ on:
 
 jobs:
   secrets:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read # For direct job URL links
       contents: read
@@ -369,7 +369,7 @@ permissions:
 
 jobs:
   security:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     steps:
       - uses: actions/checkout@v4
         with:

@@ -11,7 +11,7 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     steps:
       - uses: actions/checkout@v4
       - name: Upload resource

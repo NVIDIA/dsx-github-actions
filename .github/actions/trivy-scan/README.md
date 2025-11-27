@@ -56,7 +56,7 @@ This allows the scan to run and complete without errors. Results won't appear in
 jobs:
   trivy-scan:
     name: Vulnerability Scan
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read
@@ -78,7 +78,7 @@ jobs:
 jobs:
   scan-container:
     name: Container Vulnerability Scan
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read
@@ -101,7 +101,7 @@ jobs:
 jobs:
   comprehensive-scan:
     name: Comprehensive Security Scan
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read
@@ -301,7 +301,7 @@ on:
 
 jobs:
   daily-scan:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read
@@ -323,7 +323,7 @@ on:
 
 jobs:
   pr-scan:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read
@@ -342,7 +342,7 @@ jobs:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
     steps:
@@ -353,7 +353,7 @@ jobs:
 
   scan:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read
@@ -371,7 +371,7 @@ jobs:
 ```yaml
 jobs:
   rust-security:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read
@@ -391,7 +391,7 @@ jobs:
 ```yaml
 jobs:
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     permissions:
       actions: read
       contents: read

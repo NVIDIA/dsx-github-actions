@@ -1,0 +1,61 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write      # Create releases and tags
+  issues: write        # Comment on released issues
+  pull-requests: write # Comment on released PRs
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest # FIXME: Replace with NV Runners
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for semantic-release
+          persist-credentials: false
+
+      - name: Semantic Release
+        id: semantic
+        uses: ./.github/actions/semantic-release
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag-format: v${version}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Major Version Tag
+        if: steps.semantic.outputs.new-release-published == 'true'
+        run: |
+          NEW_VERSION="v${{ steps.semantic.outputs.new-release-version }}"
+          MAJOR_VERSION="v${{ steps.semantic.outputs.new-release-major-version }}"
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Force update major version tag (e.g., v1 points to latest v1.x.x)
+          git tag -fa "$MAJOR_VERSION" -m "Update $MAJOR_VERSION to $NEW_VERSION"
+          git push origin "$MAJOR_VERSION" --force
+
+          echo "✅ Updated major version tag: $MAJOR_VERSION -> $NEW_VERSION"
