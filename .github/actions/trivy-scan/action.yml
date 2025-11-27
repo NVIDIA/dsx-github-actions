@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: 'Vulnerability Scan'
+name: 'Trivy Security Scan'
 description: 'Performs comprehensive vulnerability scanning using Trivy to detect security issues'
 
 inputs:
@@ -52,6 +52,10 @@ inputs:
     description: 'Post vulnerability scan results as PR comment by parsing SARIF file (requires pull-requests: write permission).'
     required: false
     default: 'false'
+  fail-on-findings:
+    description: 'Fail the workflow if vulnerabilities are found (quality gate). Set to false to only warn.'
+    required: false
+    default: 'true'
   github-token:
     description: 'GitHub token for uploading SARIF results'
     required: false
@@ -156,3 +160,42 @@ runs:
         echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+
+    - name: Quality Gate
+      if: always()
+      shell: bash
+      run: |
+        # Enforce quality gate if enabled
+        if [ "${{ inputs.fail-on-findings }}" != "true" ]; then
+          echo "⚠️ Quality Gate: DISABLED (fail-on-findings=false)"
+          exit 0
+        fi
+
+        # Check if SARIF file exists
+        SARIF_FILE="vulnerability-scan-results.sarif"
+        if [ ! -f "$SARIF_FILE" ]; then
+          echo "⚠️ No SARIF file found at $SARIF_FILE, cannot determine if vulnerabilities exist"
+          exit 0
+        fi
+
+        # Count vulnerabilities by severity
+        CRITICAL=$(jq '[.runs[].results // [] | .[] | select(.level == "error")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+        HIGH=$(jq '[.runs[].results // [] | .[] | select(.level == "warning")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+        TOTAL=$(jq '[.runs[].results // []] | add | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+
+        echo "📊 Trivy Scan Results:"
+        echo "  - Total Vulnerabilities: $TOTAL"
+        echo "  - Critical/High: $((CRITICAL + HIGH))"
+
+        if [ "$TOTAL" -gt 0 ]; then
+          echo ""
+          echo "❌ Quality Gate: FAILED"
+          echo "Trivy detected $TOTAL vulnerability/vulnerabilities in the scan."
+          echo "Please review and remediate the issues before merging."
+          exit 1
+        else
+          echo ""
+          echo "✅ Quality Gate: PASSED"
+          echo "No vulnerabilities detected by Trivy."
+          exit 0
+        fi

@@ -1,0 +1,220 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'TruffleHog Secret Scan'
+description: 'Find and verify leaked credentials in your source code using TruffleHog'
+
+inputs:
+  path:
+    description: 'Repository path to scan'
+    required: false
+    default: './'
+  base:
+    description: 'Start scanning from here (base commit/branch)'
+    required: false
+    default: ''
+  head:
+    description: 'Scan commits until here (head commit/branch)'
+    required: false
+    default: ''
+  extra-args:
+    description: 'Extra arguments to pass to TruffleHog CLI (e.g., --results=verified,unknown)'
+    required: false
+    default: ''
+  version:
+    description: 'TruffleHog version to use'
+    required: false
+    default: 'latest'
+  post-pr-comment:
+    description: 'Post results as PR comment (requires pull-requests: write permission)'
+    required: false
+    default: 'false'
+  fail-on-findings:
+    description: 'Fail the workflow if secrets are found (quality gate). Set to false to only warn.'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'GitHub token for PR comments'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run TruffleHog Scan
+      id: trufflehog
+      continue-on-error: true
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ${{ inputs.path }}
+        base: ${{ inputs.base }}
+        head: ${{ inputs.head }}
+        extra_args: ${{ inputs.extra-args }}
+        version: ${{ inputs.version }}
+
+    - name: Parse Scan Results
+      if: inputs.post-pr-comment == 'true' && always()
+      id: parse-results
+      shell: bash
+      run: |
+        # Check if TruffleHog found secrets based on exit code
+        # TruffleHog exits with 183 when secrets are found, 0 when clean, 1 on error
+        SCAN_OUTCOME="${{ steps.trufflehog.outcome }}"
+
+        echo "scan_outcome=$SCAN_OUTCOME" >> $GITHUB_OUTPUT
+
+        if [ "$SCAN_OUTCOME" == "success" ]; then
+          echo "secrets_found=0" >> $GITHUB_OUTPUT
+          echo "status=clean" >> $GITHUB_OUTPUT
+        else
+          # Secrets were found - try to get more details from logs if available
+          echo "secrets_found=unknown" >> $GITHUB_OUTPUT
+          echo "status=detected" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Post TruffleHog Results to PR
+      if: inputs.post-pr-comment == 'true' && always()
+      shell: bash
+      run: |
+        # Determine if we're in a PR context
+        PR_NUMBER=""
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+        elif [[ "${{ github.ref }}" =~ ^refs/heads/pull-request/([0-9]+) ]]; then
+          PR_NUMBER="${BASH_REMATCH[1]}"
+        else
+          # Try to find PR number from commit
+          PR_NUMBER=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+        fi
+
+        if [ -z "$PR_NUMBER" ]; then
+          echo "⚠️ Not in a PR context, skipping PR comment"
+          exit 0
+        fi
+
+        # Get parsed results
+        SCAN_STATUS="${{ steps.parse-results.outputs.status }}"
+        SCAN_OUTCOME="${{ steps.parse-results.outputs.scan_outcome }}"
+
+        # Build URL for detailed logs
+        # Fetch the actual job ID from GitHub API (requires actions: read permission)
+        WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+        # Try to get the current job ID from the API
+        # Match by the current job name - most reliable method!
+        CURRENT_JOB_NAME="${{ github.job }}"
+        echo "🔍 Looking for job: $CURRENT_JOB_NAME"
+
+        JOB_ID=$(gh api /repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs \
+          --jq ".jobs[] | select(.name == \"$CURRENT_JOB_NAME\") | .id" \
+          2>&1 | grep -E '^[0-9]+$' | head -1 || echo "")
+
+        # Fallback: If exact name match fails, try to find currently in-progress job
+        if [ -z "$JOB_ID" ]; then
+          echo "⚠️ Exact job name match failed, trying in-progress job"
+          JOB_ID=$(gh api /repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs \
+            --jq '.jobs[] | select(.status == "in_progress") | select(.runner_name != null) | .id' \
+            2>&1 | grep -E '^[0-9]+$' | tail -1 || echo "")
+        fi
+
+        if [ -n "$JOB_ID" ] && [ "$JOB_ID" -eq "$JOB_ID" ] 2>/dev/null; then
+          # Valid numeric job ID found
+          echo "✅ Found job ID: $JOB_ID"
+          JOB_URL="${WORKFLOW_URL}/job/${JOB_ID}"
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            JOB_URL="${JOB_URL}?pr=${{ github.event.pull_request.number }}"
+          fi
+          echo "📋 Job URL: $JOB_URL"
+        else
+          # Fallback to workflow URL if we can't get job ID or API call fails
+          echo "⚠️ Could not determine job ID, using workflow URL"
+          JOB_URL="$WORKFLOW_URL"
+        fi
+
+        if [ "$SCAN_STATUS" == "clean" ]; then
+          REPORT="## 🔐 TruffleHog Secret Scan
+        ✅ **No secrets or credentials found!**
+
+        Your code has been scanned for 700+ types of secrets and credentials. All clear! 🎉
+
+        🔗 [View scan details]($JOB_URL)"
+        elif [ "$SCAN_STATUS" == "detected" ]; then
+          REPORT="## 🔐 TruffleHog Secret Scan
+        🚨 **Potential secrets detected!**
+
+        TruffleHog found potential secrets in your code changes. This could include:
+        - 🔑 API keys and tokens
+        - 🔐 Passwords and credentials
+        - 🎫 OAuth tokens
+        - 🗝️ Private keys
+
+        ### 📋 View Detailed Findings
+
+        👉 **[Click here to view the full TruffleHog scan results]($JOB_URL)**
+
+        The job logs contain:
+        - Exact file paths and line numbers
+        - Secret types detected
+        - Verification status (verified/unverified)
+
+        ### Next Steps
+
+        1. **Review Details**: Check the [scan logs]($JOB_URL) for specific findings
+        2. **Verify Findings**: Determine if detected items are actual secrets
+        3. **Remove Secrets**: If real, remove them from your code immediately
+        4. **Rotate Credentials**: Revoke and regenerate any leaked credentials
+        5. **Prevent Future Leaks**: Add sensitive files to \`.gitignore\`
+
+        ### Security Best Practices
+
+        ⚠️ **Never commit secrets to your repository!** Use:
+        - Environment variables for configuration
+        - Secret management tools (Vault, AWS Secrets Manager, etc.)
+        - GitHub Secrets for CI/CD workflows
+        - \`.env\` files (added to \`.gitignore\`)
+
+        📖 [Learn more about TruffleHog](https://github.com/trufflesecurity/trufflehog)"
+        else
+          # Unknown status or error
+          REPORT="## 🔐 TruffleHog Secret Scan
+        ⚠️ **Scan completed with warnings**
+
+        The secret scan finished, but the status is unclear. Please review the logs for details.
+
+        🔗 [View scan details]($JOB_URL)"
+        fi
+
+        echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+
+    - name: Quality Gate
+      if: always()
+      shell: bash
+      run: |
+        # Enforce quality gate if enabled
+        if [ "${{ inputs.fail-on-findings }}" = "true" ] && [ "${{ steps.trufflehog.outcome }}" = "failure" ]; then
+          echo "❌ Quality Gate: FAILED"
+          echo "Secrets were detected in the scan. This violates the security policy."
+          echo "Please review the scan results and remove any secrets before merging."
+          exit 1
+        elif [ "${{ steps.trufflehog.outcome }}" = "failure" ]; then
+          echo "⚠️ Quality Gate: DISABLED (fail-on-findings=false)"
+          echo "Secrets were detected but the workflow will continue."
+          exit 0
+        else
+          echo "✅ Quality Gate: PASSED"
+          echo "No secrets detected."
+          exit 0
+        fi

@@ -44,6 +44,14 @@ inputs:
     description: 'Post CodeQL results as PR comment by parsing SARIF file (works without GHAS, requires pull-requests: write permission).'
     required: false
     default: 'false'
+  fail-on-findings:
+    description: 'Fail the workflow if security issues are found (quality gate). Set to false to only warn.'
+    required: false
+    default: 'true'
+  fail-on-severity:
+    description: 'Minimum severity level to fail the workflow. Options: error (critical/high only), warning (medium+), note (all issues). Only applies when fail-on-findings is true.'
+    required: false
+    default: 'error'
   github-token:
     description: 'GitHub token for CodeQL actions'
     required: false
@@ -67,6 +75,7 @@ runs:
       run: ${{ inputs.build-command }}
 
     - name: Perform CodeQL Analysis
+      id: codeql-analyze
       uses: github/codeql-action/analyze@v4.31.5
       with:
         category: ${{ inputs.category }}
@@ -155,3 +164,76 @@ runs:
         echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+
+    - name: Quality Gate
+      if: always()
+      shell: bash
+      run: |
+        # Enforce quality gate if enabled
+        if [ "${{ inputs.fail-on-findings }}" != "true" ]; then
+          echo "⚠️ Quality Gate: DISABLED (fail-on-findings=false)"
+          exit 0
+        fi
+
+        # Find SARIF file
+        SARIF_FILE=$(find ${{ github.workspace }}/results -name "*.sarif" -type f 2>/dev/null | head -1)
+
+        if [ -z "$SARIF_FILE" ]; then
+          echo "⚠️ No SARIF file found, cannot determine if issues exist"
+          exit 0
+        fi
+
+        # Count issues by severity level
+        ERRORS=$(jq '[.runs[].results // [] | .[] | select(.level == "error")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+        WARNINGS=$(jq '[.runs[].results // [] | .[] | select(.level == "warning")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+        NOTES=$(jq '[.runs[].results // [] | .[] | select(.level == "note")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+        TOTAL_ISSUES=$((ERRORS + WARNINGS + NOTES))
+
+        echo "📊 CodeQL Results:"
+        echo "  - Total Issues: $TOTAL_ISSUES"
+        echo "  - 🔴 Errors (Critical/High): $ERRORS"
+        echo "  - 🟡 Warnings (Medium): $WARNINGS"
+        echo "  - 🔵 Notes (Low/Info): $NOTES"
+        echo ""
+
+        # Determine which severity levels to fail on
+        FAIL_ON_SEVERITY="${{ inputs.fail-on-severity }}"
+        FAIL_COUNT=0
+        FAIL_LEVELS=""
+
+        case "$FAIL_ON_SEVERITY" in
+          "error")
+            FAIL_COUNT=$ERRORS
+            FAIL_LEVELS="errors (critical/high)"
+            echo "🎯 Quality Gate Threshold: Fail on ERRORS only"
+            ;;
+          "warning")
+            FAIL_COUNT=$((ERRORS + WARNINGS))
+            FAIL_LEVELS="errors and warnings (medium+)"
+            echo "🎯 Quality Gate Threshold: Fail on ERRORS and WARNINGS"
+            ;;
+          "note"|"all")
+            FAIL_COUNT=$TOTAL_ISSUES
+            FAIL_LEVELS="all issues"
+            echo "🎯 Quality Gate Threshold: Fail on ALL issues"
+            ;;
+          *)
+            echo "⚠️ Invalid fail-on-severity: $FAIL_ON_SEVERITY, defaulting to 'error'"
+            FAIL_COUNT=$ERRORS
+            FAIL_LEVELS="errors (critical/high)"
+            echo "🎯 Quality Gate Threshold: Fail on ERRORS only"
+            ;;
+        esac
+
+        if [ "$FAIL_COUNT" -gt 0 ]; then
+          echo ""
+          echo "❌ Quality Gate: FAILED"
+          echo "CodeQL detected $FAIL_COUNT $FAIL_LEVELS in the code."
+          echo "Please review and fix the issues before merging."
+          exit 1
+        else
+          echo ""
+          echo "✅ Quality Gate: PASSED"
+          echo "No $FAIL_LEVELS detected by CodeQL."
+          exit 0
+        fi

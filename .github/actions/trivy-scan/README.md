@@ -1,4 +1,4 @@
-# Vulnerability Scan Action
+# Trivy Security Scan Action
 
 A composite GitHub Action that performs comprehensive vulnerability scanning using Trivy to detect security issues in dependencies, container images, secrets, and misconfigurations.
 
@@ -40,7 +40,7 @@ For more information, see [GitHub's GHAS documentation](https://docs.github.com/
 If you cannot enable GHAS, set `upload-sarif: 'false'` to skip the upload step:
 
 ```yaml
-- uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+- uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
   with:
     scan-type: "fs"
     upload-sarif: "false" # Disable upload when GHAS is not available
@@ -54,7 +54,7 @@ This allows the scan to run and complete without errors. Results won't appear in
 
 ```yaml
 jobs:
-  vuln-scan:
+  trivy-scan:
     name: Vulnerability Scan
     runs-on: ubuntu-latest
     permissions:
@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Vulnerability Scan
-        uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+        uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           scan-type: "fs"
           severity: "HIGH,CRITICAL"
@@ -88,7 +88,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Scan Container Image
-        uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+        uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           scan-type: "image"
           scan-ref: "nvcr.io/myorg/myapp:v1.0.0"
@@ -111,7 +111,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Comprehensive Scan
-        uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+        uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           scan-type: "fs"
           scan-ref: "."
@@ -124,18 +124,19 @@ jobs:
 
 ## Inputs
 
-| Input             | Description                                                                   | Required | Default                 |
-| ----------------- | ----------------------------------------------------------------------------- | -------- | ----------------------- |
-| `scan-type`       | Type of scan (`fs` or `image`)                                                | No       | `fs`                    |
-| `scan-ref`        | Path or image reference to scan                                               | No       | `.`                     |
-| `vuln-type`       | Vulnerability types to check                                                  | No       | `os,library`            |
-| `scanners`        | Scanners to use                                                               | No       | `vuln,secret,misconfig` |
-| `severity`        | Severity levels to report                                                     | No       | `HIGH,CRITICAL`         |
-| `skip-dirs`       | Directories to skip (comma-separated)                                         | No       | `vendor,node_modules`   |
-| `ignore-unfixed`  | Ignore unfixed vulnerabilities                                                | No       | `true`                  |
-| `upload-sarif`    | Upload results to GitHub Security (requires GHAS)                             | No       | `true`                  |
-| `post-pr-comment` | Post results as PR comment (works without GHAS, needs `pull-requests: write`) | No       | `false`                 |
-| `github-token`    | GitHub token for uploading SARIF                                              | No       | `${{ github.token }}`   |
+| Input              | Description                                                                                 | Required | Default                 |
+| ------------------ | ------------------------------------------------------------------------------------------- | -------- | ----------------------- |
+| `scan-type`        | Type of scan (`fs` or `image`)                                                              | No       | `fs`                    |
+| `scan-ref`         | Path or image reference to scan                                                             | No       | `.`                     |
+| `vuln-type`        | Vulnerability types to check                                                                | No       | `os,library`            |
+| `scanners`         | Scanners to use                                                                             | No       | `vuln,secret,misconfig` |
+| `severity`         | Severity levels to report                                                                   | No       | `HIGH,CRITICAL`         |
+| `skip-dirs`        | Directories to skip (comma-separated)                                                       | No       | `vendor,node_modules`   |
+| `ignore-unfixed`   | Ignore unfixed vulnerabilities                                                              | No       | `true`                  |
+| `upload-sarif`     | Upload results to GitHub Security (requires GHAS)                                           | No       | `true`                  |
+| `post-pr-comment`  | Post results as PR comment (works without GHAS, needs `pull-requests: write`)               | No       | `false`                 |
+| `fail-on-findings` | Fail the workflow if vulnerabilities are found (quality gate). Set to `false` to only warn. | No       | `true`                  |
+| `github-token`     | GitHub token for uploading SARIF                                                            | No       | `${{ github.token }}`   |
 
 ### Scan Types
 
@@ -173,6 +174,48 @@ permissions:
   security-events: write # Required for uploading results
 ```
 
+## Quality Gate
+
+The action includes a **quality gate** feature that fails the workflow if vulnerabilities are detected:
+
+- **Enabled by default**: `fail-on-findings: 'true'`
+- **Enforces security policy**: Blocks PRs with vulnerabilities
+- **Can be disabled**: Set `fail-on-findings: 'false'` to only warn
+
+### Example: Enforce Quality Gate
+
+```yaml
+- uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
+  with:
+    scan-type: "fs"
+    severity: "HIGH,CRITICAL"
+    fail-on-findings: "true" # Fail workflow if vulnerabilities found (default)
+```
+
+### Example: Warn Only
+
+```yaml
+- uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
+  with:
+    scan-type: "fs"
+    severity: "HIGH,CRITICAL"
+    fail-on-findings: "false" # Only warn, don't block workflow
+```
+
+**Quality Gate Output:**
+
+```text
+📊 Trivy Scan Results:
+  - Total Vulnerabilities: 5
+  - Critical/High: 5
+
+❌ Quality Gate: FAILED
+Trivy detected 5 vulnerability/vulnerabilities in the scan.
+Please review and remediate the issues before merging.
+```
+
+**Recommendation**: Start with `fail-on-findings: 'false'` during initial rollout, then enable it once vulnerabilities are remediated.
+
 ## Results
 
 Scan results are automatically uploaded to GitHub's Security tab under **Security > Code scanning alerts**.
@@ -184,7 +227,7 @@ Scan results are automatically uploaded to GitHub's Security tab under **Securit
 Enable automated PR comments by setting `post-pr-comment: true`. **This works even without GHAS!**
 
 ```yaml
-- uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+- uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
   with:
     scan-type: "fs"
     post-pr-comment: "true" # Post results to PR
@@ -265,7 +308,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           severity: "CRITICAL,HIGH"
 ```
@@ -287,7 +330,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           scan-type: "fs"
           severity: "HIGH,CRITICAL"
@@ -317,7 +360,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           scan-type: "image"
           scan-ref: ${{ needs.build.outputs.image-tag }}
@@ -335,7 +378,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           scan-type: "fs"
           scan-ref: "."
@@ -355,7 +398,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
         with:
           scan-type: "fs"
           scanners: "secret"
@@ -427,7 +470,7 @@ skip-dirs: "vendor,node_modules,target,dist,build,test,docs,.git"
     password: ${{ secrets.REGISTRY_TOKEN }}
 
 - name: Scan Image
-  uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+  uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
   with:
     scan-type: "image"
     scan-ref: "nvcr.io/private/image:tag"
@@ -438,13 +481,13 @@ skip-dirs: "vendor,node_modules,target,dist,build,test,docs,.git"
 ### Use Specific Version (Recommended for Production)
 
 ```yaml
-uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@v1.0.0
+uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@v1.0.0
 ```
 
 ### Use Latest (Development/Testing)
 
 ```yaml
-uses: NVIDIA/dsx-github-actions/.github/actions/vuln-scan@main
+uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
 ```
 
 ## What Gets Scanned

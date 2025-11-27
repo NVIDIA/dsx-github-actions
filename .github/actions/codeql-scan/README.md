@@ -130,16 +130,18 @@ jobs:
 
 ## Inputs
 
-| Input             | Description                                                                   | Required | Default               |
-| ----------------- | ----------------------------------------------------------------------------- | -------- | --------------------- |
-| `languages`       | Programming language to analyze                                               | No       | `go`                  |
-| `build-mode`      | Build mode: `autobuild`, `manual`, or `none` (use `none` for Rust)            | No       | `autobuild`           |
-| `build-command`   | Build command (only used when build-mode is `manual`)                         | No       | `make build-all`      |
-| `category`        | CodeQL analysis category                                                      | No       | `/language:default`   |
-| `upload-sarif`    | Upload results to GitHub Security (requires GHAS)                             | No       | `true`                |
-| `skip-build`      | Skip build step (only for `build-mode: none`)                                 | No       | `false`               |
-| `post-pr-comment` | Post results as PR comment (works without GHAS, needs `pull-requests: write`) | No       | `false`               |
-| `github-token`    | GitHub token for CodeQL actions                                               | No       | `${{ github.token }}` |
+| Input              | Description                                                                                                                           | Required | Default               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------- |
+| `languages`        | Programming language to analyze                                                                                                       | No       | `go`                  |
+| `build-mode`       | Build mode: `autobuild`, `manual`, or `none` (use `none` for Rust)                                                                    | No       | `autobuild`           |
+| `build-command`    | Build command (only used when build-mode is `manual`)                                                                                 | No       | `make build-all`      |
+| `category`         | CodeQL analysis category                                                                                                              | No       | `/language:default`   |
+| `upload-sarif`     | Upload results to GitHub Security (requires GHAS)                                                                                     | No       | `true`                |
+| `skip-build`       | Skip build step (only for `build-mode: none`)                                                                                         | No       | `false`               |
+| `post-pr-comment`  | Post results as PR comment (works without GHAS, needs `pull-requests: write`)                                                         | No       | `false`               |
+| `fail-on-findings` | Fail the workflow if security issues are found (quality gate). Set to `false` to only warn.                                           | No       | `true`                |
+| `fail-on-severity` | Minimum severity to fail: `error` (critical/high), `warning` (medium+), `note` (all). Only applies when `fail-on-findings` is `true`. | No       | `error`               |
+| `github-token`     | GitHub token for CodeQL actions                                                                                                       | No       | `${{ github.token }}` |
 
 ### Supported Languages
 
@@ -182,6 +184,101 @@ permissions:
   contents: read # Required for checking out code
   security-events: write # Required for uploading results
 ```
+
+## Quality Gate
+
+The action includes a **quality gate** feature with configurable severity thresholds:
+
+- **Enabled by default**: `fail-on-findings: 'true'`
+- **Severity-based**: Use `fail-on-severity` to control which issues block the workflow
+- **Flexible**: Can be disabled or configured for different severity levels
+
+### Severity Levels
+
+CodeQL maps findings to three severity levels:
+
+| Level     | CodeQL SARIF Level | Severity      | Use Case                                                |
+| --------- | ------------------ | ------------- | ------------------------------------------------------- |
+| `error`   | error              | Critical/High | **Recommended** - Block only on serious security issues |
+| `warning` | warning            | Medium        | Block on medium+ severity issues                        |
+| `note`    | note               | Low/Info      | Block on all findings including informational           |
+
+### Example: Block on Critical/High Only (Recommended)
+
+```yaml
+- uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@main
+  with:
+    languages: "go"
+    fail-on-findings: "true"
+    fail-on-severity: "error" # Only fail on critical/high severity (default)
+```
+
+**Output:**
+
+```text
+📊 CodeQL Results:
+  - Total Issues: 5
+  - 🔴 Errors (Critical/High): 2
+  - 🟡 Warnings (Medium): 2
+  - 🔵 Notes (Low/Info): 1
+
+🎯 Quality Gate Threshold: Fail on ERRORS only
+
+❌ Quality Gate: FAILED
+CodeQL detected 2 errors (critical/high) in the code.
+Please review and fix the issues before merging.
+```
+
+### Example: Block on Medium+ Severity
+
+```yaml
+- uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@main
+  with:
+    languages: "go"
+    fail-on-findings: "true"
+    fail-on-severity: "warning" # Fail on errors and warnings
+```
+
+**Output:**
+
+```text
+📊 CodeQL Results:
+  - Total Issues: 5
+  - 🔴 Errors (Critical/High): 2
+  - 🟡 Warnings (Medium): 2
+  - 🔵 Notes (Low/Info): 1
+
+🎯 Quality Gate Threshold: Fail on ERRORS and WARNINGS
+
+❌ Quality Gate: FAILED
+CodeQL detected 4 errors and warnings (medium+) in the code.
+Please review and fix the issues before merging.
+```
+
+### Example: Block on All Issues
+
+```yaml
+- uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@main
+  with:
+    languages: "go"
+    fail-on-findings: "true"
+    fail-on-severity: "note" # Fail on any finding
+```
+
+### Example: Warn Only (No Blocking)
+
+```yaml
+- uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@main
+  with:
+    languages: "go"
+    fail-on-findings: "false" # Disabled, only warn
+```
+
+**Recommendation**:
+
+1. **Start with**: `fail-on-severity: 'error'` (critical/high only) - good balance between security and developer productivity
+2. **Stricter**: `fail-on-severity: 'warning'` (medium+) - for high-security projects
+3. **Most strict**: `fail-on-severity: 'note'` (all issues) - for security-critical code
 
 ## Build Commands
 
