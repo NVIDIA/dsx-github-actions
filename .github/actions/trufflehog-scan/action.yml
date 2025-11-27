@@ -55,7 +55,7 @@ runs:
     - name: Run TruffleHog Scan
       id: trufflehog
       continue-on-error: true
-      uses: trufflesecurity/trufflehog@main
+      uses: trufflesecurity/trufflehog@aade3bff5594fe8808578dd4db3dfeae9bf2abdc # v3.91.1, use sha to align security guidelines
       with:
         path: ${{ inputs.path }}
         base: ${{ inputs.base }}
