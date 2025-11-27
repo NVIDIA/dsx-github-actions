@@ -34,29 +34,29 @@ jobs:
 
 ## Inputs
 
-| Name | Required | Default | Description |
-| ---- | -------- | ------- | ----------- |
-| `job-name` | No | `resource-push-ngc` | Compatibility job name tag |
-| `application` | No | `OTHER` | Resource application category |
-| `description` | No | `""` | Short description of the resource |
-| `display-name` | No | `""` | Display name, defaults to `name` |
-| `format` | No | `generic` | Resource format |
-| `framework` | No | `Other` | Framework label |
-| `name` | Yes | — | Resource name |
-| `ngc-force` | No | `skip` | Behavior when the version exists: `overwrite`, `skip`, or `fail` |
-| `ngc-key` | Yes | — | NGC API key (store in secrets) |
-| `ngc-path` | Yes | — | Target NGC `org/team` path |
-| `path` | Yes | — | File or directory to upload |
-| `precision` | No | `OTHER` | Resource precision |
-| `version` | Yes | — | Resource version |
-| `ngccli-version` | No | `4.9.17` | NGC CLI version to install |
+| Name             | Required | Default             | Description                                                      |
+| ---------------- | -------- | ------------------- | ---------------------------------------------------------------- |
+| `job-name`       | No       | `resource-push-ngc` | Compatibility job name tag                                       |
+| `application`    | No       | `OTHER`             | Resource application category                                    |
+| `description`    | No       | `""`                | Short description of the resource                                |
+| `display-name`   | No       | `""`                | Display name, defaults to `name`                                 |
+| `format`         | No       | `generic`           | Resource format                                                  |
+| `framework`      | No       | `Other`             | Framework label                                                  |
+| `name`           | Yes      | —                   | Resource name                                                    |
+| `ngc-force`      | No       | `skip`              | Behavior when the version exists: `overwrite`, `skip`, or `fail` |
+| `ngc-key`        | Yes      | —                   | NGC API key (store in secrets)                                   |
+| `ngc-path`       | Yes      | —                   | Target NGC `org/team` path                                       |
+| `path`           | Yes      | —                   | File or directory to upload                                      |
+| `precision`      | No       | `OTHER`             | Resource precision                                               |
+| `version`        | Yes      | —                   | Resource version                                                 |
+| `ngccli-version` | No       | `4.9.17`            | NGC CLI version to install                                       |
 
 ## Outputs
 
-| Name | Description |
-| ---- | ----------- |
-| `resource-id` | Fully qualified identifier (`org/team/name:version`). |
-| `upload-status` | `created`, `updated`, `overwritten`, or `skipped`. |
+| Name            | Description                                           |
+| --------------- | ----------------------------------------------------- |
+| `resource-id`   | Fully qualified identifier (`org/team/name:version`). |
+| `upload-status` | `created`, `updated`, `overwritten`, or `skipped`.    |
 
 ## Environment Overrides
 

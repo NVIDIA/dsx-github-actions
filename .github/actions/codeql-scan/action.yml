@@ -1,0 +1,157 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'CodeQL Security Scan'
+description: 'Performs static code analysis using GitHub CodeQL to identify security vulnerabilities'
+
+inputs:
+  languages:
+    description: 'Programming language to analyze (e.g., go, rust, python, javascript, cpp)'
+    required: false
+    default: 'go'
+  build-mode:
+    description: 'Build mode: autobuild, manual, or none. Use "none" for Rust, "manual" for Go/C++/Java'
+    required: false
+    default: 'autobuild'
+  build-command:
+    description: 'Build command to execute (only used when build-mode is manual)'
+    required: false
+    default: 'make build-all'
+  category:
+    description: 'CodeQL analysis category'
+    required: false
+    default: '/language:default'
+  upload-sarif:
+    description: 'Upload SARIF results to GitHub Security (requires GitHub Advanced Security). Set to false if GHAS is not enabled.'
+    required: false
+    default: 'true'
+  skip-build:
+    description: 'Skip build step. Use with build-mode: none when no build is required. Note: Traced languages (Go, C++, Java) cannot use pre-built artifacts.'
+    required: false
+    default: 'false'
+  post-pr-comment:
+    description: 'Post CodeQL results as PR comment by parsing SARIF file (works without GHAS, requires pull-requests: write permission).'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token for CodeQL actions'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4.31.5
+      with:
+        languages: ${{ inputs.languages }}
+        build-mode: ${{ inputs.build-mode }}
+        token: ${{ inputs.github-token }}
+      env:
+        CODEQL_EXTRACTOR_GO_BUILD_TRACING: on
+
+    - name: Build with CodeQL
+      if: inputs.build-mode == 'manual' && inputs.skip-build != 'true'
+      shell: bash
+      run: ${{ inputs.build-command }}
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v4.31.5
+      with:
+        category: ${{ inputs.category }}
+        upload: ${{ inputs.upload-sarif }}
+        output: ${{ github.workspace }}/results
+        token: ${{ inputs.github-token }}
+
+    - name: Post CodeQL Results to PR
+      if: inputs.post-pr-comment == 'true'
+      shell: bash
+      run: |
+        # Determine if we're in a PR context
+        PR_NUMBER=""
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+        elif [[ "${{ github.ref }}" =~ ^refs/heads/pull-request/([0-9]+) ]]; then
+          PR_NUMBER="${BASH_REMATCH[1]}"
+        else
+          # Try to find PR number from commit
+          PR_NUMBER=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+        fi
+
+        if [ -z "$PR_NUMBER" ]; then
+          echo "⚠️ Not in a PR context, skipping PR comment"
+          exit 0
+        fi
+
+        echo "🔍 Searching for SARIF files..."
+        echo "Working directory: $(pwd)"
+        echo "Workspace: ${{ github.workspace }}"
+
+        # Find SARIF file (CodeQL outputs to results directory)
+        SARIF_FILE=$(find ${{ github.workspace }}/results -name "*.sarif" -type f 2>/dev/null | head -1)
+
+        if [ -z "$SARIF_FILE" ]; then
+          echo "⚠️ No SARIF file found in results directory, skipping PR comment"
+          echo "Searching in entire workspace..."
+          SARIF_FILE=$(find ${{ github.workspace }} -name "*.sarif" -type f 2>/dev/null | head -1)
+          if [ -z "$SARIF_FILE" ]; then
+            echo "⚠️ No SARIF file found anywhere, skipping PR comment"
+            exit 0
+          fi
+        fi
+
+        echo "✅ Found SARIF file: $SARIF_FILE"
+
+        # Parse SARIF for issue count and details
+        TOTAL_ISSUES=$(jq '[.runs[].results // []] | add | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+
+        # Determine footer message based on upload-sarif setting
+        if [ "${{ inputs.upload-sarif }}" = "true" ]; then
+          FOOTER="🔗 [View full details in Security tab](https://github.com/${{ github.repository }}/security/code-scanning)"
+        else
+          FOOTER="💡 **Note**: Enable GitHub Advanced Security to see full details in the Security tab."
+        fi
+
+        if [ "$TOTAL_ISSUES" -eq 0 ]; then
+          REPORT="## 🛡️ CodeQL Analysis
+        ✅ No security issues found!
+
+        $FOOTER"
+        else
+          # Get severity breakdown
+          ERRORS=$(jq '[.runs[].results // [] | .[] | select(.level == "error")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+          WARNINGS=$(jq '[.runs[].results // [] | .[] | select(.level == "warning")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+          NOTES=$(jq '[.runs[].results // [] | .[] | select(.level == "note")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+
+          REPORT="## 🛡️ CodeQL Analysis
+        🚨 Found **$TOTAL_ISSUES** issue(s)
+
+        **Severity Breakdown:**
+        - 🔴 Errors: $ERRORS
+        - 🟡 Warnings: $WARNINGS
+        - 🔵 Notes: $NOTES
+
+        <details>
+        <summary>📋 Top Issues</summary>
+
+        $(jq -r '[.runs[].results // [] | .[] | select(.level == "error" or .level == "warning")] | .[0:5] | .[] | "- **\(.ruleId // "unknown")**: \(.message.text // "No description") (\(.locations[0].physicalLocation.artifactLocation.uri // "unknown"):\(.locations[0].physicalLocation.region.startLine // "?"))"' "$SARIF_FILE" 2>/dev/null || echo "No details available")
+
+        </details>
+
+        $FOOTER"
+        fi
+
+        echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}

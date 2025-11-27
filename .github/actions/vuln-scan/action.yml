@@ -1,0 +1,158 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'Vulnerability Scan'
+description: 'Performs comprehensive vulnerability scanning using Trivy to detect security issues'
+
+inputs:
+  scan-type:
+    description: 'Type of scan (fs for filesystem, image for container)'
+    required: false
+    default: 'fs'
+  scan-ref:
+    description: 'Path or reference to scan'
+    required: false
+    default: '.'
+  vuln-type:
+    description: 'Vulnerability types to check'
+    required: false
+    default: 'os,library'
+  scanners:
+    description: 'Scanners to use (comma-separated: vuln,secret,misconfig)'
+    required: false
+    default: 'vuln,secret,misconfig'
+  severity:
+    description: 'Severity levels to report (comma-separated: LOW,MEDIUM,HIGH,CRITICAL)'
+    required: false
+    default: 'HIGH,CRITICAL'
+  skip-dirs:
+    description: 'Directories to skip (comma-separated)'
+    required: false
+    default: 'vendor,node_modules'
+  ignore-unfixed:
+    description: 'Ignore unfixed vulnerabilities'
+    required: false
+    default: 'true'
+  upload-sarif:
+    description: 'Upload SARIF results to GitHub Security (requires GitHub Advanced Security). Set to false if GHAS is not enabled.'
+    required: false
+    default: 'true'
+  post-pr-comment:
+    description: 'Post vulnerability scan results as PR comment by parsing SARIF file (requires pull-requests: write permission).'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token for uploading SARIF results'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Trivy Scan
+      continue-on-error: true
+      uses: aquasecurity/trivy-action@0.33.1
+      with:
+        scan-type: ${{ inputs.scan-type }}
+        scan-ref: ${{ inputs.scan-ref }}
+        vuln-type: ${{ inputs.vuln-type }}
+        scanners: ${{ inputs.scanners }}
+        ignore-unfixed: ${{ inputs.ignore-unfixed }}
+        format: 'sarif'
+        output: 'vulnerability-scan-results.sarif'
+        severity: ${{ inputs.severity }}
+        skip-dirs: ${{ inputs.skip-dirs }}
+        limit-severities-for-sarif: true
+
+    - name: Check SARIF file exists
+      id: check_sarif
+      shell: bash
+      run: |
+        if [ -f "vulnerability-scan-results.sarif" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload SARIF Report
+      if: steps.check_sarif.outputs.exists == 'true' && inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v4.31.5
+      with:
+        sarif_file: 'vulnerability-scan-results.sarif'
+        token: ${{ inputs.github-token }}
+
+    - name: Post Vulnerability Results to PR
+      if: inputs.post-pr-comment == 'true' && steps.check_sarif.outputs.exists == 'true'
+      shell: bash
+      run: |
+        # Determine if we're in a PR context
+        PR_NUMBER=""
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+        elif [[ "${{ github.ref }}" =~ ^refs/heads/pull-request/([0-9]+) ]]; then
+          PR_NUMBER="${BASH_REMATCH[1]}"
+        else
+          # Try to find PR number from commit
+          PR_NUMBER=$(gh pr list --head "${{ github.ref_name }}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+        fi
+
+        if [ -z "$PR_NUMBER" ]; then
+          echo "⚠️ Not in a PR context, skipping PR comment"
+          exit 0
+        fi
+
+        SARIF_FILE="vulnerability-scan-results.sarif"
+
+        # Parse SARIF for issue count and details
+        TOTAL_ISSUES=$(jq '[.runs[].results // []] | add | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+
+        # Determine footer message based on upload-sarif setting
+        if [ "${{ inputs.upload-sarif }}" = "true" ]; then
+          FOOTER="🔗 [View full details in Security tab](https://github.com/${{ github.repository }}/security/code-scanning)"
+        else
+          FOOTER="💡 **Note**: Enable GitHub Advanced Security to see full details in the Security tab."
+        fi
+
+        if [ "$TOTAL_ISSUES" -eq 0 ]; then
+          REPORT="## 🛡️ Vulnerability Scan
+        ✅ No vulnerabilities found!
+
+        $FOOTER"
+        else
+          # Get severity breakdown
+          CRITICAL=$(jq '[.runs[].results // [] | .[] | select(.level == "error")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+          HIGH=$(jq '[.runs[].results // [] | .[] | select(.level == "warning")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+          MEDIUM=$(jq '[.runs[].results // [] | .[] | select(.level == "note")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
+
+          REPORT="## 🛡️ Vulnerability Scan
+        🚨 Found **$TOTAL_ISSUES** vulnerability(ies)
+
+        **Severity Breakdown:**
+        - 🔴 Critical/High: $CRITICAL
+        - 🟡 Medium: $HIGH
+        - 🔵 Low/Info: $MEDIUM
+
+        <details>
+        <summary>📋 Top Vulnerabilities</summary>
+
+        $(jq -r '[.runs[].results // [] | .[] | select(.level == "error" or .level == "warning")] | .[0:10] | .[] | "- **\(.ruleId // "unknown")**: \(.message.text // "No description") (\(.locations[0].physicalLocation.artifactLocation.uri // "unknown"))"' "$SARIF_FILE" 2>/dev/null || echo "No details available")
+
+        </details>
+
+        $FOOTER"
+        fi
+
+        echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
