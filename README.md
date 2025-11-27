@@ -116,7 +116,7 @@ uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@55d1e0af17fb4431edac
 ```
 
 ✅ **Best for**: Production, CI/CD pipelines
-⚠️ **Note**: Won't receive bug fixes or new f
+⚠️ **Note**: Won't receive bug fixes or new features automatically
 
 #### 2. Pin to Specific Version
 

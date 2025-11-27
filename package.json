@@ -1,0 +1,20 @@
+{
+  "name": "dsx-github-actions",
+  "version": "0.0.0-development",
+  "description": "Reusable GitHub Actions for NVIDIA DSX projects",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NVIDIA/dsx-github-actions.git"
+  },
+  "keywords": [
+    "github-actions",
+    "nvidia",
+    "security",
+    "codeql",
+    "trivy",
+    "trufflehog"
+  ],
+  "author": "NVIDIA Corporation",
+  "license": "Apache-2.0"
+}
