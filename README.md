@@ -16,7 +16,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 
 | Workflow                                                                 | Description                                           | Use Case                                |
 | ------------------------------------------------------------------------ | ----------------------------------------------------- | --------------------------------------- |
-| [promote-image](.github/workflows/promote-image.yml) | Re-tag and re-publish multi-arch images via `regctl` | Promote OCI images across registries |
+| [promote-image](.github/workflows/promote-image.yml) | Re-tag and re-publish multi-arch images via `skopeo` | Promote OCI images across registries |
 
 ## ⚠️ Important: GitHub Advanced Security Required
 
@@ -112,7 +112,7 @@ jobs:
       DEST_PASSWORD: ${{ secrets.NVCR_STG_TOKEN }}
 ```
 
-This reusable workflow wraps `regctl image copy`, so it copies the entire manifest list (multi-arch) by default, supports tag-to-tag retagging, and also allows pinning a specific digest by supplying the optional `digest` input. Pass GitHub Container Registry (GHCR) or NVIDIA Container Registry (NGC) credentials through the required secrets block to authenticate against different registries, and consume the resulting `${{ needs.promote.outputs.destination_digest }}` output if downstream jobs need the promoted digest.
+This reusable workflow wraps `skopeo copy`, so it copies the entire manifest list (multi-arch) by default, supports tag-to-tag retagging, and also allows pinning a specific digest by supplying the optional `digest` input. Pass GitHub Container Registry (GHCR) or NVIDIA Container Registry (NGC) credentials through the required secrets block to authenticate against different registries, and consume the resulting `${{ needs.promote.outputs.destination_digest }}` output if downstream jobs need the promoted digest.
 
 ## 📚 Documentation
 
