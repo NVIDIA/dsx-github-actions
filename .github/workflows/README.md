@@ -2,6 +2,35 @@
 
 This directory contains automated workflows for the dsx-github-actions repository.
 
+## Promote Image (`promote-image.yml`)
+
+A reusable workflow that copies OCI images between registries (e.g., from NGC to GHCR or between repositories) using `skopeo`.
+
+### Features
+
+- **Multi-Arch Support**: Copies entire manifest lists (all architectures) by default
+- **Credential Isolation**: Supports different credentials for source and destination registries (resolving common auth conflicts)
+- **Tag or Digest**: Can promote by tag or pin to a specific digest
+- **Output Digest**: Returns the SHA256 digest of the promoted image for downstream use
+
+### Usage
+
+```yaml
+jobs:
+  promote:
+    uses: NVIDIA/dsx-github-actions/.github/workflows/promote-image.yml@main
+    with:
+      source: nvcr.io/myorg/source-image
+      source_tag: v1.0.0
+      destination: ghcr.io/myorg/dest-image
+      destination_tag: v1.0.0
+    secrets:
+      SOURCE_USERNAME: ${{ secrets.NGC_USER }}
+      SOURCE_PASSWORD: ${{ secrets.NGC_KEY }}
+      DEST_USERNAME: ${{ secrets.GHCR_USER }}
+      DEST_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+```
+
 ## Release Workflow (`release.yml`)
 
 Automatically creates semantic version tags and releases when commits are pushed to the `main` branch using [semantic-release](https://github.com/semantic-release/semantic-release).

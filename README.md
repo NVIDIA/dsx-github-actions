@@ -12,6 +12,12 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | [semantic-release](.github/actions/semantic-release/)   | Automated versioning and releases | Semantic versioning and changelog |
 | [resource-push-ngc](.github/actions/resource-push-ngc/) | Push resources to NGC             | Artifact publishing               |
 
+## ♻️ Available Workflows
+
+| Workflow                                                                 | Description                                           | Use Case                                |
+| ------------------------------------------------------------------------ | ----------------------------------------------------- | --------------------------------------- |
+| [promote-image](.github/workflows/promote-image.yml) | Re-tag and re-publish multi-arch images via `skopeo` | Promote OCI images across registries |
+
 ## ⚠️ Important: GitHub Advanced Security Required
 
 The security scanning actions (`codeql-scan` and `trivy-scan`) upload results to GitHub's Code Scanning feature, which **requires GitHub Advanced Security (GHAS)** to be enabled:
@@ -79,6 +85,34 @@ jobs:
     scan-ref: "nvcr.io/myorg/myapp:v1.0.0"
     severity: "CRITICAL,HIGH"
 ```
+
+### Image Promotion
+```yaml
+name: Promote OCI Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      new-tag:
+        type: string
+        required: true
+
+jobs:
+  promote:
+    uses: NVIDIA/dsx-github-actions/.github/workflows/promote-image.yml@main
+    with:
+      source: nvcr.io/acme/dev/service
+      source_tag: faf3d1
+      destination: nvcr.io/acme/stg/service
+      destination_tag: ${{ github.event.inputs.new-tag }}
+    secrets:
+      SOURCE_USERNAME: ${{ secrets.NVCR_DEV_USER }}
+      SOURCE_PASSWORD: ${{ secrets.NVCR_DEV_TOKEN }}
+      DEST_USERNAME: ${{ secrets.NVCR_STG_USER }}
+      DEST_PASSWORD: ${{ secrets.NVCR_STG_TOKEN }}
+```
+
+This reusable workflow wraps `skopeo copy`, so it copies the entire manifest list (multi-arch) by default, supports tag-to-tag retagging, and also allows pinning a specific digest by supplying the optional `digest` input. Pass GitHub Container Registry (GHCR) or NVIDIA Container Registry (NGC) credentials through the required secrets block to authenticate against different registries, and consume the resulting `${{ needs.promote.outputs.destination_digest }}` output if downstream jobs need the promoted digest.
 
 ## 📚 Documentation
 
@@ -278,6 +312,19 @@ jobs:
           post-pr-comment: "true"
 ```
 
+## 🧹 Developer Workflow
+
+This repository ships with a [`pre-commit`](https://pre-commit.com/) configuration to lint YAML, trim whitespace, run ShellCheck on shell scripts, and execute `actionlint` against GitHub workflows before every commit.
+
+1. Install `pre-commit` (pick one)
+   - `pipx install pre-commit`
+   - `pip install pre-commit`
+   - `brew install pre-commit`
+2. Run `pre-commit install` at the repository root to enable the git hook.
+3. Run `pre-commit run --all-files` once to ensure every workflow and shell script passes ShellCheck/actionlint.
+
+If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commit run shellcheck --all-files` locally to focus on the failing hook.
+
 ## Contributing
 
 1. Create action in `.github/actions/my-action/`
@@ -298,6 +345,7 @@ jobs:
 │   └── resource-push-ngc/  # NGC publishing
 └── workflows/
     ├── release.yml         # Automatic semantic versioning
+    ├── promote-image.yml   # Promote image across registries
     └── README.md           # Workflows documentation
 
 CONTRIBUTING.md             # Contribution guidelines

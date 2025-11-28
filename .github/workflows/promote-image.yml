@@ -1,0 +1,111 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Promote Image
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: "Source image without tag, e.g. nvcr.io/org/app"
+        required: true
+        type: string
+      source_tag:
+        description: "Source tag, e.g. 1.0.0"
+        required: true
+        type: string
+      destination:
+        description: "Destination image without tag, e.g. ghcr.io/org/app"
+        required: true
+        type: string
+      destination_tag:
+        description: "Destination tag, e.g. prod or 1"
+        required: true
+        type: string
+      digest:
+        description: "Optional: explicit digest (takes precedence over source_tag)"
+        required: false
+        type: string
+    secrets:
+      SOURCE_USERNAME:
+        required: true
+      SOURCE_PASSWORD:
+        required: true
+      DEST_USERNAME:
+        required: true
+      DEST_PASSWORD:
+        required: true
+    outputs:
+      destination_digest:
+        description: "Digest after copy completes"
+        value: ${{ jobs.promote.outputs.destination_digest }}
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      destination_digest: ${{ steps.dest_digest.outputs.digest }}
+    steps:
+      - name: Prepare refs
+        id: refs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Assemble source reference
+          if [[ -n "${{ inputs.digest }}" ]]; then
+            source_ref="${{ inputs.source }}@${{ inputs.digest }}"
+          else
+            source_ref="${{ inputs.source }}:${{ inputs.source_tag }}"
+          fi
+
+          # Assemble destination reference
+          destination_ref="${{ inputs.destination }}:${{ inputs.destination_tag }}"
+
+          echo "source_ref=${source_ref}" >> "$GITHUB_OUTPUT"
+          echo "destination_ref=${destination_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Copy multi-arch manifest
+        shell: bash
+        env:
+          SRC_USER: ${{ secrets.SOURCE_USERNAME }}
+          SRC_PASS: ${{ secrets.SOURCE_PASSWORD }}
+          DEST_USER: ${{ secrets.DEST_USERNAME }}
+          DEST_PASS: ${{ secrets.DEST_PASSWORD }}
+
+        run: |
+          set -eo pipefail
+          skopeo copy --all \
+            --src-creds "$SRC_USER:$SRC_PASS" \
+            --dest-creds "$DEST_USER:$DEST_PASS" \
+            "docker://${{ steps.refs.outputs.source_ref }}" \
+            "docker://${{ steps.refs.outputs.destination_ref }}"
+
+      - name: Retrieve destination digest
+        id: dest_digest
+        shell: bash
+        env:
+          DEST_USER: ${{ secrets.DEST_USERNAME }}
+          DEST_PASS: ${{ secrets.DEST_PASSWORD }}
+        run: |
+          set -eo pipefail
+          # Inspect the destination image to retrieve the digest
+          digest=$(skopeo inspect --raw \
+            --creds "${DEST_USER}:${DEST_PASS}" \
+            "docker://${{ steps.refs.outputs.destination_ref }}" | sha256sum | awk '{print "sha256:"$1}')
+
+          echo "digest=${digest}" >>"$GITHUB_OUTPUT"
+          echo "destination digest: ${digest}"
