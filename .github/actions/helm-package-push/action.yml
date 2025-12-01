@@ -40,7 +40,7 @@ inputs:
   ngc-registry:
     description: "NGC registry address"
     required: false
-    default: "https://helm.ngc.nvidia.com/"
+    default: "https://helm.ngc.nvidia.com"
 
 outputs:
   chart-name:
