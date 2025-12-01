@@ -248,8 +248,12 @@ helm_ngc_push() {
       log_info "${CC_HELM_CHART_NAME} already exists in ${CC_HELM_NGC_PATH}. No need to create."
     else
       log_warn "${CC_HELM_CHART_NAME} not found in ${CC_HELM_NGC_PATH}. Creating..."
-      local desc
-      desc=$(yq -r '.description' "${CC_HELM_CHART_PATH:-.}/Chart.yaml")
+      local desc="${CC_HELM_CHART_DESCRIPTION:-}"
+      if [[ -z "$desc" && -n "${CC_HELM_CHART_TGZ:-}" && -f "${CC_HELM_CHART_TGZ}" ]]; then
+        desc=$(helm show chart "${CC_HELM_CHART_TGZ}" | yq -r '.description // ""')
+      elif [[ -n "${CC_HELM_CHART_PATH:-}" && -f "${CC_HELM_CHART_PATH}/Chart.yaml" ]]; then
+        desc=$(yq -r '.description // ""' "${CC_HELM_CHART_PATH}/Chart.yaml")
+      fi
       ngc registry chart create "${CC_HELM_NGC_PATH}/${CC_HELM_CHART_NAME}" --short-desc "$desc"
     fi
 
