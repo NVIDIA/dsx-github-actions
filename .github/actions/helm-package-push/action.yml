@@ -1,0 +1,142 @@
+name: "Helm Package and Push"
+description: "Packages a Helm Chart and pushes it to NGC"
+inputs:
+  chart-version:
+    description: "Set the version of the Helm Chart"
+    required: false
+    default: ""
+  chart-version-suffix:
+    description: "Set the version suffix of the Helm Chart"
+    required: false
+    default: ""
+  chart-path:
+    description: "Root directory for the Helm Chart"
+    required: false
+    default: "."
+  lint:
+    description: "Whether to lint the Helm Chart"
+    required: false
+    default: "false"
+  extra-repos:
+    description: "Extra repositories for packaging"
+    required: false
+    default: "[]"
+  ngc-push:
+    description: "Enable pushing to NGC"
+    required: false
+    default: "true"
+  ngc-key:
+    description: "Key to use for NGC authentication"
+    required: false
+    default: ""
+  ngc-path:
+    description: "Org and Team path on NGC"
+    required: false
+    default: ""
+  ngc-duplicate:
+    description: "Action for duplicate Helm Chart versions: skip, overwrite, fail"
+    required: false
+    default: "skip"
+  ngc-registry:
+    description: "NGC registry address"
+    required: false
+    default: "https://helm.ngc.nvidia.com"
+
+outputs:
+  chart-name:
+    description: "The name of the chart"
+    value: ${{ steps.set_outputs.outputs.chart-name }}
+  chart-version:
+    description: "The version of the chart"
+    value: ${{ steps.set_outputs.outputs.chart-version }}
+  push-skipped:
+    description: "Whether the push was skipped"
+    value: ${{ steps.set_outputs.outputs.push-skipped }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: dcarbone/install-jq-action@v1.0.1
+    - uses: dcarbone/install-yq-action@v1.1.1
+
+    - name: Install Helm
+      shell: bash
+      run: |
+        "${{ github.action_path }}/../helm-shared/scripts/install-helm.sh"
+
+    - name: Install NGC CLI
+      shell: bash
+      if: inputs.ngc-push == 'true'
+      run: |
+        "${{ github.action_path }}/../helm-shared/scripts/install-ngc.sh"
+
+    - name: Init Package
+      shell: bash
+      env:
+        HELM_CHART_VERSION: ${{ inputs.chart-version }}
+        HELM_CHART_VERSION_SUFFIX: ${{ inputs.chart-version-suffix }}
+        CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_init_package
+
+    - name: Process Repos
+      shell: bash
+      env:
+        CC_HELM_EXTRA_REPOS: ${{ inputs.extra-repos }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_extra_repos_var
+
+    - name: Package Chart
+      shell: bash
+      env:
+        CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
+        CC_HELM_PACKAGE_DIR: "package"
+        CC_HELM_LINT: ${{ inputs.lint }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_extra_repos_add
+        "$UTILS_PATH" helm_lint
+        "$UTILS_PATH" helm_package
+
+    - name: Init Push
+      shell: bash
+      if: inputs.ngc-push == 'true'
+      env:
+        CC_HELM_PACKAGE_DIR: "package"
+        CC_HELM_NGC_KEY: ${{ inputs.ngc-key }}
+        CC_HELM_NGC_PATH: ${{ inputs.ngc-path }}
+        CC_HELM_NGC_REGISTRY: ${{ inputs.ngc-registry }}
+        HELM_NGC_DUPLICATE: ${{ inputs.ngc-duplicate }}
+        CC_HELM_NGC_PUSH: ${{ inputs.ngc-push }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_init_push
+
+    - name: Push to NGC
+      shell: bash
+      if: inputs.ngc-push == 'true'
+      env:
+        CC_HELM_NGC_KEY: ${{ inputs.ngc-key }}
+        CC_HELM_NGC_PATH: ${{ inputs.ngc-path }}
+        CC_HELM_NGC_REGISTRY: ${{ inputs.ngc-registry }}
+        CC_HELM_NGC_PUSH: ${{ inputs.ngc-push }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_ngc_repo_add
+        "$UTILS_PATH" helm_ngc_push
+        "$UTILS_PATH" helm_check_push_errors
+
+    - name: Set Outputs
+      id: set_outputs
+      shell: bash
+      run: |
+        # These variables should be available from Init Package/Push steps
+        echo "chart-name=${CC_HELM_CHART_NAME:-}" >> "$GITHUB_OUTPUT"
+        echo "chart-version=${CC_HELM_CHART_VERSION:-}" >> "$GITHUB_OUTPUT"
+        if [[ "${CC_HELM_NGC_PUSH_STATUS:-}" == "skipped" ]]; then
+          echo "push-skipped=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "push-skipped=false" >> "$GITHUB_OUTPUT"
+        fi

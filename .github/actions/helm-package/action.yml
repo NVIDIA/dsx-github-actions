@@ -1,0 +1,68 @@
+name: "Helm Package"
+description: "Packages a Helm Chart"
+inputs:
+  chart-version:
+    description: "Set the version of the Helm Chart"
+    required: false
+    default: ""
+  chart-version-suffix:
+    description: "Set the version suffix of the Helm Chart"
+    required: false
+    default: ""
+  chart-path:
+    description: "Root directory for the Helm Chart"
+    required: false
+    default: "."
+  package-dir:
+    description: "Directory for the .tgz artifact"
+    required: false
+    default: "package"
+  lint:
+    description: "Whether to lint the Helm Chart"
+    required: false
+    default: "false"
+  extra-repos:
+    description: "Extra repositories for packaging"
+    required: false
+    default: "[]"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: dcarbone/install-jq-action@v1.0.1
+    - uses: dcarbone/install-yq-action@v1.1.1
+
+    - name: Install Helm
+      shell: bash
+      run: |
+        "${{ github.action_path }}/../helm-shared/scripts/install-helm.sh"
+
+    - name: Init Package
+      shell: bash
+      env:
+        HELM_CHART_VERSION: ${{ inputs.chart-version }}
+        HELM_CHART_VERSION_SUFFIX: ${{ inputs.chart-version-suffix }}
+        CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_init_package
+
+    - name: Process Repos
+      shell: bash
+      env:
+        CC_HELM_EXTRA_REPOS: ${{ inputs.extra-repos }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_extra_repos_var
+
+    - name: Package Chart
+      shell: bash
+      env:
+        CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
+        CC_HELM_PACKAGE_DIR: ${{ inputs.package-dir }}
+        CC_HELM_LINT: ${{ inputs.lint }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_extra_repos_add
+        "$UTILS_PATH" helm_lint
+        "$UTILS_PATH" helm_package

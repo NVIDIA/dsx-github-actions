@@ -1,0 +1,56 @@
+name: "Helm Validate"
+description: "Validates a Helm Chart using lint and template commands"
+inputs:
+  chart-path:
+    description: "Root directory for the Helm Chart"
+    required: false
+    default: "."
+  lint:
+    description: "Whether to lint the Helm Chart"
+    required: false
+    default: "true"
+  template:
+    description: "Whether to template the Helm Chart"
+    required: false
+    default: "true"
+  extra-repos:
+    description: "Extra repositories for validation"
+    required: false
+    default: "[]"
+  valueOverrides:
+    description: "Value overrides to pass to helm commands via --set flags"
+    required: false
+    default: "[]"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: dcarbone/install-jq-action@v1.0.1
+    - uses: dcarbone/install-yq-action@v1.1.1
+
+    - name: Install Helm
+      shell: bash
+      run: |
+        "${{ github.action_path }}/../helm-shared/scripts/install-helm.sh"
+
+    - name: Process Variables
+      shell: bash
+      env:
+        CC_HELM_EXTRA_REPOS: ${{ inputs.extra-repos }}
+        CC_HELM_VALUE_OVERRIDES: ${{ inputs.valueOverrides }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_extra_repos_var
+        "$UTILS_PATH" helm_value_overrides_var
+
+    - name: Validate Chart
+      shell: bash
+      env:
+        CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
+        CC_HELM_LINT: ${{ inputs.lint }}
+        CC_HELM_TEMPLATE: ${{ inputs.template }}
+      run: |
+        UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
+        "$UTILS_PATH" helm_extra_repos_add
+        "$UTILS_PATH" helm_lint
+        "$UTILS_PATH" helm_template
