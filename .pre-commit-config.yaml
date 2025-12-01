@@ -13,8 +13,6 @@ repos:
     hooks:
       - id: shellcheck
         files: ^(.+\.sh|\.github/.+\.sh)$
-        args:
-          - --shell=sh
 
   - repo: https://github.com/rhysd/actionlint
     rev: v1.6.27
