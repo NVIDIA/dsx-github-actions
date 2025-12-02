@@ -7,7 +7,6 @@ A GitHub Composite Action to create and push a git tag to the current commit.
 -   **Automatic Git Installation**: Checks for `git` and installs it (via `apt-get`) if missing.
 -   **Git Configuration**: Automatically configures `user.name` and `user.email` to `github-actions[bot]` if not set.
 -   **Tag Management**: Creates a local tag (idempotent) and pushes it to the remote repository.
--   **Checkout Included**: Includes `actions/checkout` step automatically, so you don't need to explicitly checkout in your workflow step (though typically you might already have checked out code). *Note: Since `actions/checkout` is idempotent, calling it multiple times is generally safe but might be redundant.*
 
 ## Usage
 
@@ -28,13 +27,12 @@ steps:
 
 ## Behavior
 
-1.  **Checkout**: Runs `actions/checkout@v3`.
-2.  **Install Git**: Ensures `git` is installed on the runner.
-3.  **Configure**: Sets git user/email to the GitHub Actions bot identity.
-4.  **Tag**:
+1.  **Install Git**: Ensures `git` is installed on the runner.
+2.  **Configure**: Sets git user/email to the GitHub Actions bot identity.
+3.  **Tag**:
     -   Checks if the tag already exists locally.
     -   If not, creates the tag pointing to the current commit (`HEAD`).
-5.  **Push**: Pushes the tag to `origin`.
+4.  **Push**: Pushes the tag to `origin`.
 
 ## Notes
 
