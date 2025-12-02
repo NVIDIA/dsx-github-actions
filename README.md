@@ -11,6 +11,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | [trufflehog-scan](.github/actions/trufflehog-scan/)     | Secret scanning with TruffleHog   | Leaked credentials detection      |
 | [semantic-release](.github/actions/semantic-release/)   | Automated versioning and releases | Semantic versioning and changelog |
 | [resource-push-ngc](.github/actions/resource-push-ngc/) | Push resources to NGC             | Artifact publishing               |
+| [git-tag](.github/actions/git-tag/)                     | Create and push git tag           | Tagging releases                  |
 
 ## ♻️ Available Workflows
 
@@ -342,7 +343,8 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
 │   ├── trivy-scan/         # Vulnerability scanning (Trivy)
 │   ├── trufflehog-scan/    # Secret scanning (TruffleHog)
 │   ├── semantic-release/   # Automated versioning and releases
-│   └── resource-push-ngc/  # NGC publishing
+│   ├── resource-push-ngc/  # NGC resources publishing
+│   └── git-tag/            # Create and push git tag
 └── workflows/
     ├── release.yml         # Automatic semantic versioning
     ├── promote-image.yml   # Promote image across registries

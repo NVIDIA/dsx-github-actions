@@ -1,0 +1,16 @@
+name: "Git Tag"
+description: "Create and push a git tag"
+inputs:
+  tag:
+    description: "The tag name to create and push"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Tag and Push
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+      run: |
+        "${{ github.action_path }}/scripts/tag.sh"
