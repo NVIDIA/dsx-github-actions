@@ -37,4 +37,4 @@ steps:
 ## Notes
 
 -   This action assumes it is running on a Linux runner (Ubuntu/Debian based) for the git installation logic.
--   The action uses the token provided to the workflow (implicitly via `actions/checkout`) to authenticate the push. Ensure your workflow has `contents: write` permission if you are pushing to a protected branch or need to create tags.
+-   The action uses the token provided to the workflow to authenticate the push. Ensure your workflow has `contents: write` permission if you are pushing to a protected branch or need to create tags.
