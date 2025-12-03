@@ -20,24 +20,9 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | ------------------------------------------------------------------------ | ----------------------------------------------------- | --------------------------------------- |
 | [promote-image](.github/workflows/promote-image.yml) | Re-tag and re-publish multi-arch images via `skopeo` | Promote OCI images across registries |
 
-## ⚠️ Important: GitHub Advanced Security Required
+## Important: GitHub Advanced Security Required
 
-The security scanning actions (`codeql-scan` and `trivy-scan`) upload results to GitHub's Code Scanning feature, which **requires GitHub Advanced Security (GHAS)** to be enabled:
-
-- ✅ **Public repositories**: Free and automatically available
-- ⚠️ **Private repositories**: Requires GHAS license
-
-Without GHAS enabled, scans will run successfully but uploads will fail. See individual action documentation for workarounds and details:
-
-- [CodeQL Prerequisites](.github/actions/codeql-scan/README.md#️-prerequisites)
-- [Vuln Scan Prerequisites](.github/actions/trivy-scan/README.md#️-prerequisites)
-
-## 📖 Quick Start
-
-### Security Scanning (Rust)
-
-```yaml
-name: Security Checks
+The security scanning actiohttps://github.com/NVIDIA/dsx-github-actions/pull/10
 
 on: [push, pull_request]
 
@@ -62,6 +47,7 @@ jobs:
         with:
           severity: "HIGH,CRITICAL"
           skip-dirs: "target,vendor"
+
 ```
 
 ### Security Scanning (Go)
@@ -89,6 +75,7 @@ jobs:
 ```
 
 ### Image Promotion
+
 ```yaml
 name: Promote OCI Image
 
