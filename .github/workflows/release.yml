@@ -58,3 +58,108 @@ jobs:
           git push origin "$MAJOR_VERSION" --force
 
           echo "✅ Updated major version tag: $MAJOR_VERSION -> $NEW_VERSION"
+
+      - name: Notify Slack - Release Published
+        if: steps.semantic.outputs.new-release-published == 'true'
+        uses: ./.github/actions/slack-notify
+        with:
+          slack-bot-token: ${{ secrets.CDS_SLACK_BOT_OAUTH_TOKEN }}
+          channel-id: C0A14US6GFP # cds-release-notifications
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🎉 New Release Published"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version:*\nv${{ steps.semantic.outputs.new-release-version }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Released by:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Major Tag:*\nv${{ steps.semantic.outputs.new-release-major-version }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Release Notes:*\n${{ steps.semantic.outputs.new-release-notes }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Release"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.semantic.outputs.new-release-version }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+
+      - name: Notify Slack - No Release
+        if: steps.semantic.outputs.new-release-published != 'true'
+        uses: ./.github/actions/slack-notify
+        with:
+          slack-bot-token: ${{ secrets.CDS_SLACK_BOT_OAUTH_TOKEN }}
+          channel-id: C0A14US6GFP # cds-release-notifications
+          errors: 'false'
+          message: |
+            ℹ️ *No New Release*
+
+            *Repository:* ${{ github.repository }}
+            *Branch:* ${{ github.ref_name }}
+            *Commit:* `${{ github.sha }}`
+            *Author:* ${{ github.actor }}
+
+            No releasable changes were found in this push.
+
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>
+
+      - name: Notify Slack - Release Failed
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          slack-bot-token: ${{ secrets.CDS_SLACK_BOT_OAUTH_TOKEN }}
+          channel-id: C0A14US6GFP # cds-release-notifications
+          errors: 'false'
+          message: |
+            ❌ *Release Workflow Failed*
+
+            *Repository:* ${{ github.repository }}
+            *Branch:* ${{ github.ref_name }}
+            *Triggered by:* ${{ github.actor }}
+
+            The release workflow encountered an error. Please check the logs for details.
+
+            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>
