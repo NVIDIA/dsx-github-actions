@@ -59,6 +59,18 @@ jobs:
 
           echo "✅ Updated major version tag: $MAJOR_VERSION -> $NEW_VERSION"
 
+      - name: Prepare Release Notes for Slack
+        if: steps.semantic.outputs.new-release-published == 'true'
+        id: prepare-notes
+        run: |
+          # Truncate and escape release notes for JSON
+          NOTES=$(echo '${{ steps.semantic.outputs.new-release-notes }}' | head -c 2000 | jq -Rs .)
+          echo "notes=$NOTES" >> $GITHUB_OUTPUT
+
+          # Also create a simple summary
+          SUMMARY=$(echo '${{ steps.semantic.outputs.new-release-notes }}' | head -n 3 | sed 's/^# //' | tr '\n' ' ')
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+
       - name: Notify Slack - Release Published
         if: steps.semantic.outputs.new-release-published == 'true'
         uses: ./.github/actions/slack-notify
@@ -67,6 +79,7 @@ jobs:
           channel-id: C0A14US6GFP # cds-release-notifications
           payload: |
             {
+              "text": "New release v${{ steps.semantic.outputs.new-release-version }} published for ${{ github.repository }}",
               "blocks": [
                 {
                   "type": "header",
@@ -100,7 +113,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Release Notes:*\n${{ steps.semantic.outputs.new-release-notes }}"
+                    "text": "${{ steps.prepare-notes.outputs.summary }}"
                   }
                 },
                 {
@@ -110,7 +123,7 @@ jobs:
                       "type": "button",
                       "text": {
                         "type": "plain_text",
-                        "text": "View Release"
+                        "text": "View Release Notes"
                       },
                       "url": "${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.semantic.outputs.new-release-version }}"
                     },
