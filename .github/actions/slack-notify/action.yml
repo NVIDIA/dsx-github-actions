@@ -1,0 +1,131 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'Slack Notify'
+description: 'Send notifications to Slack channels using the official Slack GitHub Action'
+
+inputs:
+  slack-bot-token:
+    description: 'Slack Bot User OAuth Token (xoxb-...) from GitHub secrets'
+    required: true
+  channel-id:
+    description: 'Slack channel ID to post the message to (e.g., C1234567890)'
+    required: true
+  message:
+    description: 'Message text to send (supports Slack mrkdwn formatting)'
+    required: false
+    default: ''
+  payload:
+    description: 'Custom JSON payload for advanced message formatting (overrides message)'
+    required: false
+    default: ''
+  method:
+    description: 'Slack API method to call (default: chat.postMessage)'
+    required: false
+    default: 'chat.postMessage'
+  errors:
+    description: 'Whether to fail the step on errors (true/false)'
+    required: false
+    default: 'true'
+
+outputs:
+  time:
+    description: 'Time the message was sent'
+    value: ${{ steps.slack.outputs.time }}
+  thread_ts:
+    description: 'Timestamp of the message thread (for threaded replies)'
+    value: ${{ steps.slack.outputs.thread_ts }}
+  ts:
+    description: 'Timestamp of the message'
+    value: ${{ steps.slack.outputs.ts }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare Slack Payload
+      id: prepare-payload
+      shell: bash
+      run: |
+        CHANNEL_ID="${{ inputs.channel-id }}"
+
+        # If custom payload is provided, merge channel into it
+        if [ -n '${{ inputs.payload }}' ]; then
+          # Parse the JSON and add/update channel field
+          PAYLOAD=$(cat <<'PAYLOAD_EOF' | jq -c ". + {channel: \"$CHANNEL_ID\"}"
+        ${{ inputs.payload }}
+        PAYLOAD_EOF
+        )
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        elif [ -n '${{ inputs.message }}' ]; then
+          # Simple message mode - construct basic payload
+          MESSAGE=$(cat <<'MESSAGE_EOF'
+        ${{ inputs.message }}
+        MESSAGE_EOF
+        )
+          PAYLOAD=$(jq -n \
+            --arg channel "$CHANNEL_ID" \
+            --arg text "$MESSAGE" \
+            '{channel: $channel, text: $text}')
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          # No input provided - error
+          echo "ERROR: Either 'message' or 'payload' input must be provided" >&2
+          exit 1
+        fi
+
+    - name: Send Slack Notification
+      id: slack
+      continue-on-error: ${{ inputs.errors == 'false' }}
+      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+      with:
+        method: ${{ inputs.method }}
+        token: ${{ inputs.slack-bot-token }}
+        payload: ${{ steps.prepare-payload.outputs.payload }}
+
+    - name: Display Notification Info
+      if: steps.slack.outcome == 'success'
+      shell: bash
+      run: |
+        if [ -n "${{ steps.slack.outputs.ts }}" ]; then
+          echo "✅ Slack notification sent successfully!"
+          echo "📬 Channel ID: ${{ inputs.channel-id }}"
+          echo "⏰ Timestamp: ${{ steps.slack.outputs.ts }}"
+          if [ -n "${{ steps.slack.outputs.thread_ts }}" ]; then
+            echo "🧵 Thread Timestamp: ${{ steps.slack.outputs.thread_ts }}"
+          fi
+        else
+          echo "⚠️ Slack API call completed but returned no timestamp!"
+          echo "This usually means the bot doesn't have permission to post to the channel."
+          echo ""
+          echo "Common solutions:"
+          echo "  1. Invite the bot to channel ${{ inputs.channel-id }}: /invite @YourBotName"
+          echo "  2. Add 'chat:write.public' scope to your bot (for public channels)"
+          echo "  3. Verify the channel ID is correct: ${{ inputs.channel-id }}"
+          if [ "${{ inputs.errors }}" == "true" ]; then
+            exit 1
+          fi
+        fi
+
+    - name: Display Error Info
+      if: steps.slack.outcome == 'failure'
+      shell: bash
+      run: |
+        echo "❌ Slack notification failed!"
+        if [ "${{ inputs.errors }}" == "false" ]; then
+          echo "⚠️ Continuing workflow despite failure (errors: false)"
+        fi

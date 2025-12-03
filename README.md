@@ -12,6 +12,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | [semantic-release](.github/actions/semantic-release/)   | Automated versioning and releases | Semantic versioning and changelog |
 | [resource-push-ngc](.github/actions/resource-push-ngc/) | Push resources to NGC             | Artifact publishing               |
 | [git-tag](.github/actions/git-tag/)                     | Create and push git tag           | Tagging releases                  |
+| [slack-notify](.github/actions/slack-notify/)           | Send notifications to Slack       | CI/CD status notifications        |
 
 ## ♻️ Available Workflows
 
@@ -122,6 +123,7 @@ This reusable workflow wraps `skopeo copy`, so it copies the entire manifest lis
 - [TruffleHog Secret Scan Action](.github/actions/trufflehog-scan/README.md)
 - [Semantic Release Action](.github/actions/semantic-release/README.md)
 - [Resource Push NGC Action](.github/actions/resource-push-ngc/README.md)
+- [Slack Notify Action](.github/actions/slack-notify/README.md)
 - [Workflows Guide](.github/workflows/README.md)
 
 ## 🎯 Features
@@ -344,7 +346,8 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
 │   ├── trufflehog-scan/    # Secret scanning (TruffleHog)
 │   ├── semantic-release/   # Automated versioning and releases
 │   ├── resource-push-ngc/  # NGC resources publishing
-│   └── git-tag/            # Create and push git tag
+│   ├── git-tag/            # Create and push git tag
+│   └── slack-notify/       # Send Slack notifications
 └── workflows/
     ├── release.yml         # Automatic semantic versioning
     ├── promote-image.yml   # Promote image across registries
