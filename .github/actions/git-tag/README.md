@@ -17,6 +17,7 @@ steps:
     uses: NVIDIA/dsx-github-actions/.github/actions/git-tag@main
     with:
       tag: "v1.0.0"
+      github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ## Inputs
@@ -24,6 +25,7 @@ steps:
 | Input | Description | Required | Default |
 | :--- | :--- | :--- | :--- |
 | `tag` | The tag name to create and push. | `true` | N/A |
+| `github_token` | GitHub token for git authentication. Use a PAT to trigger subsequent workflows. | `true` | N/A |
 
 ## Behavior
 

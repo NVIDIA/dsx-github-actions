@@ -49,7 +49,12 @@ main() {
     fi
 
     log_info "Pushing tag: $tag"
-    git push origin "$tag"
+
+    if [[ -n "${INPUT_GITHUB_TOKEN:-}" ]]; then
+        git push "https://${INPUT_GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$tag"
+    else
+        git push origin "$tag"
+    fi
 }
 
 main "$@"
