@@ -5,7 +5,7 @@ inputs:
     description: "The tag name to create and push"
     required: true
   github_token:
-    description: "GitHub token for git tag"
+    description: "GitHub token for git tag. Use a PAT to trigger subsequent workflows."
     required: true
 runs:
   using: "composite"
