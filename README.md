@@ -354,7 +354,7 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
     └── README.md           # Workflows documentation
 
 CONTRIBUTING.md             # Contribution guidelines
-LICENSE                     # Apache 2.0
+LICENSE                     # Apache 2.0 license
 SECURITY.md                 # Security policy
 README.md                   # This file
 ```
