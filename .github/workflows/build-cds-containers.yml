@@ -3,6 +3,8 @@ name: Build CDS Containers
 # Only trigger when files in cds-containers/ folder are modified
 on:
   push:
+    branches:
+      - main  # Only push images when merging to main
     paths:
       - 'cds-containers/**'
       - '.github/workflows/build-cds-containers.yml'
