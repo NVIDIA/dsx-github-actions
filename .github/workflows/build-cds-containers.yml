@@ -100,7 +100,8 @@ jobs:
         with:
           context: ./cds-containers
           file: ${{ matrix.image.path }}/Dockerfile
-          push: true
+          # Only push on push events (not PRs) to avoid permission issues
+          push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
