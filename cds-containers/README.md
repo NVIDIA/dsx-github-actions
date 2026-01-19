@@ -11,7 +11,7 @@ Container images for CDS tooling, optimized for GitHub Actions workflows. These 
 ### 1. `cds-tools` - CDS Tools Container
 Comprehensive tooling for infrastructure automation, CI/CD, and Kubernetes operations.
 
-**Image**: `ghcr.io/nvidia/dsx-github-actions/cds-tools:latest`
+**Image**: `ghcr.io/nvidia/dsx-cds-tools:latest`
 
 **Includes**:
 - **Bazel** (multiple versions):
@@ -29,12 +29,12 @@ Comprehensive tooling for infrastructure automation, CI/CD, and Kubernetes opera
 ### 2. `cds-grafana-backup-tool`
 Specialized container for backing up Grafana instances.
 
-**Image**: `ghcr.io/nvidia/dsx-github-actions/cds-grafana-backup-tool:latest`
+**Image**: `ghcr.io/nvidia/dsx-cds-grafana-backup-tool:latest`
 
 ### 3. `cds-go-dev-1.24-alpine` - Go Development (Alpine)
 Lightweight Go 1.24 development environment with essential tooling.
 
-**Image**: `ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-alpine:latest`
+**Image**: `ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:latest`
 
 **Includes**:
 - Go 1.24.3 (Alpine-based)
@@ -51,7 +51,7 @@ Lightweight Go 1.24 development environment with essential tooling.
 ### 4. `cds-go-dev-1.24-debian` - Go Development (Debian)
 Full-featured Go 1.24 environment with better C library compatibility.
 
-**Image**: `ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-debian:latest`
+**Image**: `ghcr.io/nvidia/dsx-cds-go-dev-1.24-debian:latest`
 
 **Size**: ~300MB+
 
@@ -74,7 +74,7 @@ jobs:
       packages: read  # Required to pull from GHCR
     
     container:
-      image: ghcr.io/nvidia/dsx-github-actions/cds-tools:0.0.1
+      image: ghcr.io/nvidia/dsx-cds-tools:0.0.1
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -114,14 +114,14 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-alpine:latest \
+            ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:latest \
             go build ./...
 ```
 
 ### Method 3: Building Custom Image Based on CDS Containers
 
 ```dockerfile
-FROM ghcr.io/nvidia/dsx-github-actions/cds-tools:0.0.1
+FROM ghcr.io/nvidia/dsx-cds-tools:0.0.1
 
 # Add your custom tools
 RUN apt-get update && apt-get install -y \
@@ -197,8 +197,8 @@ Bump version to 0.1.0"
 git push
 
 # Pipeline runs automatically, creates:
-# - ghcr.io/nvidia/dsx-github-actions/cds-tools:0.1.0
-# - ghcr.io/nvidia/dsx-github-actions/cds-tools:latest
+# - ghcr.io/nvidia/dsx-cds-tools:0.1.0
+# - ghcr.io/nvidia/dsx-cds-tools:latest
 ```
 
 ---
@@ -209,8 +209,8 @@ git push
 
 | GitLab Registry | GitHub GHCR |
 |-----------------|-------------|
-| `registry.gitlab-master.nvidia.com/cds/cds-containers/tools:latest` | `ghcr.io/nvidia/dsx-github-actions/cds-tools:latest` |
-| `registry.gitlab-master.nvidia.com/cds/cds-containers/go-dev-1.24-alpine:1.0.0` | `ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-alpine:0.0.1` |
+| `registry.gitlab-master.nvidia.com/cds/cds-containers/tools:latest` | `ghcr.io/nvidia/dsx-cds-tools:latest` |
+| `registry.gitlab-master.nvidia.com/cds/cds-containers/go-dev-1.24-alpine:1.0.0` | `ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:0.0.1` |
 
 ### Key Differences
 
@@ -221,7 +221,7 @@ git push
 | Permissions | Inherited from repo | Explicit `permissions: packages: write/read` |
 | Job syntax | `image: <url>` | `container: { image: <url>, credentials: {...} }` |
 | Internal tools | ✅ nvault, cds-cli | ❌ Removed (no internal network) |
-| Versioning | Git tags | VERSION.md file |
+| Versioning | Git tags | VERSION file |
 
 ---
 
@@ -253,7 +253,7 @@ If your Makefile uses `bazel` commands directly, override the default:
 jobs:
   build:
     container:
-      image: ghcr.io/nvidia/dsx-github-actions/cds-tools:latest
+      image: ghcr.io/nvidia/dsx-cds-tools:latest
     
     steps:
       - name: Override bazel to use version 6.5.0
@@ -289,7 +289,7 @@ jobs:
      path: cds-containers/my-new-image
      description: "Description of your new image"
    ```
-4. Update `VERSION.md` (at least MINOR bump)
+4. Update `VERSION` (at least MINOR bump)
 5. Update this README to document the new image
 6. Push changes - pipeline will build and test automatically
 
@@ -312,7 +312,7 @@ docker run --rm test-cds-tools bazel --version
 
 - **GHCR Packages**: https://github.com/orgs/NVIDIA/packages?repo_name=dsx-github-actions
 - **GitHub Actions Workflow**: `.github/workflows/build-cds-containers.yml`
-- **Version History**: [`VERSION.md`](./VERSION.md)
+- **Version History**: See `CHANGELOG.md`
 - **Original GitLab Repo**: https://gitlab-master.nvidia.com/cds/cds-containers
 
 ---
@@ -321,5 +321,5 @@ docker run --rm test-cds-tools bazel --version
 
 - **No internal tools**: `nvault` and `cds-cli` are not included as GitHub runners cannot reach internal NVIDIA resources
 - **For internal use**: Use GitLab version at `registry.gitlab-master.nvidia.com/cds/cds-containers/tools`
-- **Version-based tagging**: Images are tagged with versions from `VERSION.md`, not Git tags
+- **Version-based tagging**: Images are tagged with versions from `VERSION`, not Git tags
 - **Path-filtered pipeline**: Only changes to `cds-containers/` folder trigger builds
