@@ -49,16 +49,16 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - name: cds-tools
+          - name: tools
             path: cds-containers/tools
             description: "CDS tools container with Bazel, Terraform, Helm, kubectl, NGC CLI, etc."
-          - name: cds-grafana-backup-tool
+          - name: grafana-backup-tool
             path: cds-containers/grafana-backup-tool
             description: "Grafana backup tool container"
-          - name: cds-go-dev-1.24-alpine
+          - name: go-dev-1.24-alpine
             path: cds-containers/go-dev-1.24-alpine
             description: "Go 1.24 development container (Alpine-based, minimal size)"
-          - name: cds-go-dev-1.24-debian
+          - name: go-dev-1.24-debian
             path: cds-containers/go-dev-1.24-debian
             description: "Go 1.24 development container (Debian-based, better compatibility)"
     
