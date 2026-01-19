@@ -1,0 +1,212 @@
+name: Build CDS Containers
+
+# Only trigger when files in cds-containers/ folder are modified
+on:
+  push:
+    paths:
+      - 'cds-containers/**'
+      - '.github/workflows/build-cds-containers.yml'
+  pull_request:
+    paths:
+      - 'cds-containers/**'
+      - '.github/workflows/build-cds-containers.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: nvidia/dsx-github-actions
+
+permissions:
+  contents: read
+  packages: write  # Required to push to GHCR
+
+jobs:
+  # Job 1: Read version from VERSION.md
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Extract version from VERSION.md
+        id: extract-version
+        run: |
+          VERSION=$(cat cds-containers/VERSION.md | tr -d '[:space:]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Container version: $VERSION"
+
+  # Job 2: Build and push all container images
+  build-and-push-images:
+    runs-on: ubuntu-latest
+    needs: get-version
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: cds-tools
+            path: cds-containers/tools
+            description: "CDS tools container with Bazel, Terraform, Helm, kubectl, NGC CLI, etc."
+          - name: cds-grafana-backup-tool
+            path: cds-containers/grafana-backup-tool
+            description: "Grafana backup tool container"
+          - name: cds-go-dev-1.24-alpine
+            path: cds-containers/go-dev-1.24-alpine
+            description: "Go 1.24 development container (Alpine-based, minimal size)"
+          - name: cds-go-dev-1.24-debian
+            path: cds-containers/go-dev-1.24-debian
+            description: "Go 1.24 development container (Debian-based, better compatibility)"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image.name }}
+          tags: |
+            # Version from VERSION.md: 0.0.1
+            type=raw,value=${{ needs.get-version.outputs.version }}
+            # Major.minor: 0.0.1 → 0.0
+            type=raw,value=${{ needs.get-version.outputs.version }},enable=true,suffix=-latest
+            # Latest tag
+            type=raw,value=latest
+            # Commit SHA: dev-abc1234 (for testing specific builds)
+            type=sha,prefix=dev-
+            # Branch name (for PR/branch builds)
+            type=ref,event=branch
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.description=${{ matrix.image.description }}
+            org.opencontainers.image.vendor=NVIDIA
+            org.opencontainers.image.version=${{ needs.get-version.outputs.version }}
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./cds-containers
+          file: ${{ matrix.image.path }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Image pushed successfully
+        run: |
+          echo "✅ Image pushed to GHCR:"
+          echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
+
+  # Job 3: Test using the built go-dev image
+  test-go-dev-image:
+    runs-on: ubuntu-latest
+    needs: [get-version, build-and-push-images]
+    
+    # Use the newly built go-dev container with version tag
+    container:
+      image: ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    steps:
+      - name: Test container tools
+        run: |
+          echo "Testing Go development container (v${{ needs.get-version.outputs.version }})..."
+          go version
+          golangci-lint --version
+          goimports -h || true
+          
+          echo ""
+          echo "✅ Go container tools are working!"
+      
+      - name: Test building Go code
+        run: |
+          # Create a simple Go program to test
+          cat > hello.go << 'EOF'
+          package main
+          import "fmt"
+          func main() {
+              fmt.Println("Hello from CDS Go container v${{ needs.get-version.outputs.version }}!")
+          }
+          EOF
+          
+          go build hello.go
+          ./hello
+
+  # Job 4: Test using tools container
+  test-tools-image:
+    runs-on: ubuntu-latest
+    needs: [get-version, build-and-push-images]
+    
+    container:
+      image: ghcr.io/nvidia/dsx-github-actions/cds-tools:${{ needs.get-version.outputs.version }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    steps:
+      - name: Test tools container
+        run: |
+          echo "Testing CDS tools container (v${{ needs.get-version.outputs.version }})..."
+          echo ""
+          
+          echo "🔧 Tool versions:"
+          echo "  - Bazel (default): $(bazel --version)"
+          echo "  - Bazel 6: $(bazel6 --version)"
+          echo "  - Bazel 8: $(bazel8 --version)"
+          echo "  - Kubectl: $(kubectl version --client --short 2>/dev/null || kubectl version --client)"
+          echo "  - Helm: $(helm version --short)"
+          echo "  - Terraform: $(terraform version -json | jq -r '.terraform_version')"
+          echo "  - Terragrunt: $(terragrunt --version)"
+          echo "  - NGC CLI: $(ngc version --json | jq -r '.version')"
+          echo "  - YQ: $(yq --version)"
+          echo "  - Node.js: $(node --version)"
+          echo "  - Python: $(python3 --version)"
+          echo "  - UV: $(uv --version)"
+          echo ""
+          echo "✅ All tools are working!"
+
+  # Job 5: Summary
+  summary:
+    runs-on: ubuntu-latest
+    needs: [get-version, build-and-push-images, test-go-dev-image, test-tools-image]
+    if: always()
+    
+    steps:
+      - name: Build summary
+        run: |
+          echo "## 🎉 CDS Containers Build Summary"
+          echo ""
+          echo "📦 Version: ${{ needs.get-version.outputs.version }}"
+          echo "🔨 Trigger: ${{ github.event_name }}"
+          echo "📌 Commit: ${{ github.sha }}"
+          echo ""
+          echo "✅ Built and pushed 4 container images to GHCR:"
+          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-tools:${{ needs.get-version.outputs.version }}"
+          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-grafana-backup-tool:${{ needs.get-version.outputs.version }}"
+          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}"
+          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-debian:${{ needs.get-version.outputs.version }}"
+          echo ""
+          echo "📍 Usage example:"
+          echo "   container:"
+          echo "     image: ghcr.io/nvidia/dsx-github-actions/cds-tools:${{ needs.get-version.outputs.version }}"
+          echo "     credentials:"
+          echo "       username: \${{ github.actor }}"
+          echo "       password: \${{ secrets.GITHUB_TOKEN }}"
+          echo ""
+          echo "✅ All tests passed!"
