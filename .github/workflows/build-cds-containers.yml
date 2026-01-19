@@ -16,7 +16,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: nvidia/dsx-github-actions
+  IMAGE_NAMESPACE: nvidia
+  IMAGE_PREFIX: dsx-cds-  # Prefix to identify CDS container images
 
 permissions:
   contents: read
@@ -79,7 +80,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image.name }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PREFIX }}${{ matrix.image.name }}
           tags: |
             # Version from VERSION.md: 0.0.1
             type=raw,value=${{ needs.get-version.outputs.version }}
@@ -129,7 +130,7 @@ jobs:
     
     # Use the newly built go-dev container with version tag
     container:
-      image: ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}
+      image: ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -167,7 +168,7 @@ jobs:
     if: github.event_name == 'push'
     
     container:
-      image: ghcr.io/nvidia/dsx-github-actions/cds-tools:${{ needs.get-version.outputs.version }}
+      image: ghcr.io/nvidia/dsx-cds-tools:${{ needs.get-version.outputs.version }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -210,14 +211,14 @@ jobs:
           echo "📌 Commit: ${{ github.sha }}"
           echo ""
           echo "✅ Built and pushed 4 container images to GHCR:"
-          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-tools:${{ needs.get-version.outputs.version }}"
-          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-grafana-backup-tool:${{ needs.get-version.outputs.version }}"
-          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}"
-          echo "  - ghcr.io/nvidia/dsx-github-actions/cds-go-dev-1.24-debian:${{ needs.get-version.outputs.version }}"
+          echo "  - ghcr.io/nvidia/dsx-cds-tools:${{ needs.get-version.outputs.version }}"
+          echo "  - ghcr.io/nvidia/dsx-cds-grafana-backup-tool:${{ needs.get-version.outputs.version }}"
+          echo "  - ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}"
+          echo "  - ghcr.io/nvidia/dsx-cds-go-dev-1.24-debian:${{ needs.get-version.outputs.version }}"
           echo ""
           echo "📍 Usage example:"
           echo "   container:"
-          echo "     image: ghcr.io/nvidia/dsx-github-actions/cds-tools:${{ needs.get-version.outputs.version }}"
+          echo "     image: ghcr.io/nvidia/dsx-cds-tools:${{ needs.get-version.outputs.version }}"
           echo "     credentials:"
           echo "       username: \${{ github.actor }}"
           echo "       password: \${{ secrets.GITHUB_TOKEN }}"
