@@ -154,7 +154,7 @@ WORKDIR /app
 ## 🏗️ Versioning and Updates
 
 ### Current Version
-The current version is defined in [`VERSION.md`](./VERSION.md): **0.0.1**
+The current version is defined in [`VERSION`](./VERSION): **0.0.1**
 
 This file contains only the semantic version number (e.g., `0.0.1`).
 
@@ -163,7 +163,7 @@ This file contains only the semantic version number (e.g., `0.0.1`).
 When you need to update tools or fix issues:
 
 1. **Make changes** to Dockerfiles in this folder
-2. **Update VERSION.md**:
+2. **Update VERSION**:
    - Edit the file to contain only the new version number
    - Follow [Semantic Versioning](https://semver.org/)
    - Example: `0.1.0`
@@ -187,7 +187,7 @@ When you need to update tools or fix issues:
 vim cds-containers/tools/Dockerfile
 
 # Update version (just the semver number)
-echo "0.1.0" > cds-containers/VERSION.md
+echo "0.1.0" > cds-containers/VERSION
 
 # Commit with descriptive message
 git add cds-containers/

@@ -31,10 +31,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Extract version from VERSION.md
+      - name: Extract version from VERSION
         id: extract-version
         run: |
-          VERSION=$(cat cds-containers/VERSION.md | tr -d '[:space:]')
+          VERSION=$(cat cds-containers/VERSION | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📌 Container version: $VERSION"
 
