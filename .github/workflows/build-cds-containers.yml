@@ -109,10 +109,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
-      - name: Image pushed successfully
+      - name: Build summary
         run: |
-          echo "✅ Image pushed to GHCR:"
-          echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "✅ Image built and pushed to GHCR:"
+            echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
+          else
+            echo "✅ Image built successfully (not pushed in PR)"
+            echo "📦 Tags that would be created:"
+            echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
+          fi
 
   # Job 3: Test using the built go-dev image
   test-go-dev-image:
