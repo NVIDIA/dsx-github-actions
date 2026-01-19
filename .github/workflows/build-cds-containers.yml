@@ -116,6 +116,8 @@ jobs:
   test-go-dev-image:
     runs-on: ubuntu-latest
     needs: [get-version, build-and-push-images]
+    # Only run tests when images are pushed (not on PRs)
+    if: github.event_name == 'push'
     
     # Use the newly built go-dev container with version tag
     container:
@@ -153,6 +155,8 @@ jobs:
   test-tools-image:
     runs-on: ubuntu-latest
     needs: [get-version, build-and-push-images]
+    # Only run tests when images are pushed (not on PRs)
+    if: github.event_name == 'push'
     
     container:
       image: ghcr.io/nvidia/dsx-github-actions/cds-tools:${{ needs.get-version.outputs.version }}
