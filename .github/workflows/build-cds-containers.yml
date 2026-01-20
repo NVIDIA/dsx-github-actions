@@ -1,14 +1,11 @@
 name: Build CDS Containers
 
-# Only trigger when files in cds-containers/ folder are modified
+# Trigger only on pushes to main or copy-pr-bot mirror branches, and only when relevant paths change
 on:
   push:
     branches:
-      - main  # Only push images when merging to main
-    paths:
-      - 'cds-containers/**'
-      - '.github/workflows/build-cds-containers.yml'
-  pull_request:
+      - main # Only push images when merging to main
+      - pull-request/**
     paths:
       - 'cds-containers/**'
       - '.github/workflows/build-cds-containers.yml'
@@ -29,11 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.extract-version.outputs.version }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Extract version from VERSION
         id: extract-version
         run: |
@@ -61,21 +58,22 @@ jobs:
           - name: go-dev-1.24-debian
             path: cds-containers/go-dev-1.24-debian
             description: "Go 1.24 development container (Debian-based, better compatibility)"
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Log in to GitHub Container Registry
+        if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -97,19 +95,19 @@ jobs:
             org.opencontainers.image.description=${{ matrix.image.description }}
             org.opencontainers.image.vendor=NVIDIA
             org.opencontainers.image.version=${{ needs.get-version.outputs.version }}
-      
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./cds-containers
           file: ${{ matrix.image.path }}/Dockerfile
-          # Only push on push events (not PRs) to avoid permission issues
-          push: ${{ github.event_name == 'push' }}
+          # Only push on main to avoid publishing images from PR mirror branches
+          push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      
+
       - name: Build summary
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
@@ -125,16 +123,16 @@ jobs:
   test-go-dev-image:
     runs-on: ubuntu-latest
     needs: [get-version, build-and-push-images]
-    # Only run tests when images are pushed (not on PRs)
-    if: github.event_name == 'push'
-    
+    # Only run tests when images are pushed (main only)
+    if: github.ref == 'refs/heads/main'
+
     # Use the newly built go-dev container with version tag
     container:
       image: ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    
+
     steps:
       - name: Test container tools
         run: |
@@ -142,10 +140,10 @@ jobs:
           go version
           golangci-lint --version
           goimports -h || true
-          
+
           echo ""
           echo "✅ Go container tools are working!"
-      
+
       - name: Test building Go code
         run: |
           # Create a simple Go program to test
@@ -156,7 +154,7 @@ jobs:
               fmt.Println("Hello from CDS Go container v${{ needs.get-version.outputs.version }}!")
           }
           EOF
-          
+
           go build hello.go
           ./hello
 
@@ -164,21 +162,21 @@ jobs:
   test-tools-image:
     runs-on: ubuntu-latest
     needs: [get-version, build-and-push-images]
-    # Only run tests when images are pushed (not on PRs)
-    if: github.event_name == 'push'
-    
+    # Only run tests when images are pushed (main only)
+    if: github.ref == 'refs/heads/main'
+
     container:
       image: ghcr.io/nvidia/dsx-cds-tools:${{ needs.get-version.outputs.version }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    
+
     steps:
       - name: Test tools container
         run: |
           echo "Testing CDS tools container (v${{ needs.get-version.outputs.version }})..."
           echo ""
-          
+
           echo "🔧 Tool versions:"
           echo "  - Bazel (default): $(bazel --version)"
           echo "  - Bazel 6: $(bazel6 --version)"
@@ -200,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [get-version, build-and-push-images, test-go-dev-image, test-tools-image]
     if: always()
-    
+
     steps:
       - name: Build summary
         run: |
@@ -210,11 +208,15 @@ jobs:
           echo "🔨 Trigger: ${{ github.event_name }}"
           echo "📌 Commit: ${{ github.sha }}"
           echo ""
-          echo "✅ Built and pushed 4 container images to GHCR:"
-          echo "  - ghcr.io/nvidia/dsx-cds-tools:${{ needs.get-version.outputs.version }}"
-          echo "  - ghcr.io/nvidia/dsx-cds-grafana-backup-tool:${{ needs.get-version.outputs.version }}"
-          echo "  - ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}"
-          echo "  - ghcr.io/nvidia/dsx-cds-go-dev-1.24-debian:${{ needs.get-version.outputs.version }}"
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            echo "✅ Built and pushed 4 container images to GHCR:"
+            echo "  - ghcr.io/nvidia/dsx-cds-tools:${{ needs.get-version.outputs.version }}"
+            echo "  - ghcr.io/nvidia/dsx-cds-grafana-backup-tool:${{ needs.get-version.outputs.version }}"
+            echo "  - ghcr.io/nvidia/dsx-cds-go-dev-1.24-alpine:${{ needs.get-version.outputs.version }}"
+            echo "  - ghcr.io/nvidia/dsx-cds-go-dev-1.24-debian:${{ needs.get-version.outputs.version }}"
+          else
+            echo "✅ Built images successfully (not pushed on non-main branches)"
+          fi
           echo ""
           echo "📍 Usage example:"
           echo "   container:"
