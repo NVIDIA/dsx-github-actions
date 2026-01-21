@@ -37,6 +37,7 @@ jobs:
           VERSION=$(cat cds-containers/VERSION | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📌 Container version: $VERSION"
+          exit 1
 
   # Job 2: Build and push all container images
   build-and-push-images:
