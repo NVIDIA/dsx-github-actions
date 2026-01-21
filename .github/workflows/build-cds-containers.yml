@@ -6,9 +6,9 @@ on:
     branches:
       - main # Only push images when merging to main
       - pull-request/**
-    paths:
-      - 'cds-containers/**'
-      - '.github/workflows/build-cds-containers.yml'
+    #paths:
+    #  - 'cds-containers/**'
+    #  - '.github/workflows/build-cds-containers.yml'
   workflow_dispatch:  # Allow manual trigger
 
 env:
