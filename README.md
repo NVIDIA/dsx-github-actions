@@ -11,6 +11,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | [trufflehog-scan](.github/actions/trufflehog-scan/)     | Secret scanning with TruffleHog   | Leaked credentials detection      |
 | [semantic-release](.github/actions/semantic-release/)   | Automated versioning and releases | Semantic versioning and changelog |
 | [resource-push-ngc](.github/actions/resource-push-ngc/) | Push resources to NGC             | Artifact publishing               |
+| [docker-build](.github/actions/docker-build/)           | Docker Buildx build/push wrapper  | Build/push multi-arch OCI images  |
 | [git-tag](.github/actions/git-tag/)                     | Create and push git tag           | Tagging releases                  |
 | [slack-notify](.github/actions/slack-notify/)           | Send notifications to Slack       | CI/CD status notifications        |
 
@@ -19,6 +20,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | Workflow                                                                 | Description                                           | Use Case                                |
 | ------------------------------------------------------------------------ | ----------------------------------------------------- | --------------------------------------- |
 | [promote-image](.github/workflows/promote-image.yml) | Re-tag and re-publish multi-arch images via `skopeo` | Promote OCI images across registries |
+| [docker-build](.github/workflows/docker-build.yml) | Reusable workflow wrapper for Docker build/push | Share Docker build logic across repos |
 
 ## ⚠️ Important: GitHub Advanced Security Required
 
@@ -123,6 +125,7 @@ This reusable workflow wraps `skopeo copy`, so it copies the entire manifest lis
 - [TruffleHog Secret Scan Action](.github/actions/trufflehog-scan/README.md)
 - [Semantic Release Action](.github/actions/semantic-release/README.md)
 - [Resource Push NGC Action](.github/actions/resource-push-ngc/README.md)
+- [Docker Build Action](.github/actions/docker-build/README.md)
 - [Slack Notify Action](.github/actions/slack-notify/README.md)
 - [Workflows Guide](.github/workflows/README.md)
 
@@ -344,6 +347,7 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
 │   ├── codeql-scan/        # Static code analysis (CodeQL)
 │   ├── trivy-scan/         # Vulnerability scanning (Trivy)
 │   ├── trufflehog-scan/    # Secret scanning (TruffleHog)
+│   ├── docker-build/       # Docker build/push wrapper
 │   ├── semantic-release/   # Automated versioning and releases
 │   ├── resource-push-ngc/  # NGC resources publishing
 │   ├── git-tag/            # Create and push git tag
@@ -351,6 +355,7 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
 └── workflows/
     ├── release.yml         # Automatic semantic versioning
     ├── promote-image.yml   # Promote image across registries
+    ├── docker-build.yml    # Reusable Docker build/push wrapper
     └── README.md           # Workflows documentation
 
 CONTRIBUTING.md             # Contribution guidelines
