@@ -29,9 +29,9 @@ inputs:
     required: false
     default: 'os,library'
   scanners:
-    description: 'Scanners to use (comma-separated: vuln,secret,misconfig)'
+    description: 'Scanners to use (comma-separated: vuln,secret,misconfig,license)'
     required: false
-    default: 'vuln,secret,misconfig'
+    default: 'vuln,secret,misconfig,license'
   severity:
     description: 'Severity levels to report (comma-separated: LOW,MEDIUM,HIGH,CRITICAL)'
     required: false
