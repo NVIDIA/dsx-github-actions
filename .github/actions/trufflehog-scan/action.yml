@@ -87,6 +87,9 @@ runs:
       if: inputs.post-pr-comment == 'true' && always()
       shell: bash
       run: |
+        # Marker for finding/updating existing comment
+        COMMENT_MARKER="<!-- dsx-trufflehog-scan -->"
+
         # Determine if we're in a PR context
         PR_NUMBER=""
         if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -142,15 +145,27 @@ runs:
           JOB_URL="$WORKFLOW_URL"
         fi
 
+        # Use the correct commit SHA (PR head commit for pull_request event, otherwise github.sha)
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+        else
+          COMMIT_SHA="${{ github.sha }}"
+        fi
+        SHORT_SHA="${COMMIT_SHA:0:7}"
+
         if [ "$SCAN_STATUS" == "clean" ]; then
-          REPORT="## 🔐 TruffleHog Secret Scan
+          REPORT="${COMMENT_MARKER}
+        ## 🔐 TruffleHog Secret Scan
         ✅ **No secrets or credentials found!**
 
         Your code has been scanned for 700+ types of secrets and credentials. All clear! 🎉
 
-        🔗 [View scan details]($JOB_URL)"
+        🔗 [View scan details]($JOB_URL)
+
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         elif [ "$SCAN_STATUS" == "detected" ]; then
-          REPORT="## 🔐 TruffleHog Secret Scan
+          REPORT="${COMMENT_MARKER}
+        ## 🔐 TruffleHog Secret Scan
         🚨 **Potential secrets detected!**
 
         TruffleHog found potential secrets in your code changes. This could include:
@@ -184,18 +199,60 @@ runs:
         - GitHub Secrets for CI/CD workflows
         - \`.env\` files (added to \`.gitignore\`)
 
-        📖 [Learn more about TruffleHog](https://github.com/trufflesecurity/trufflehog)"
+        📖 [Learn more about TruffleHog](https://github.com/trufflesecurity/trufflehog)
+
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         else
           # Unknown status or error
-          REPORT="## 🔐 TruffleHog Secret Scan
+          REPORT="${COMMENT_MARKER}
+        ## 🔐 TruffleHog Secret Scan
         ⚠️ **Scan completed with warnings**
 
         The secret scan finished, but the status is unclear. Please review the logs for details.
 
-        🔗 [View scan details]($JOB_URL)"
+        🔗 [View scan details]($JOB_URL)
+
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         fi
 
-        echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
+        # Find existing comment from github-actions[bot] with our marker
+        EXISTING_COMMENT=$(gh api "/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+          --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- dsx-trufflehog-scan -->")) | {id, body}' \
+          2>/dev/null | head -1 || echo "")
+
+        EXISTING_COMMENT_ID=""
+        PREVIOUS_STATUS=""
+        if [ -n "$EXISTING_COMMENT" ]; then
+          EXISTING_COMMENT_ID=$(echo "$EXISTING_COMMENT" | jq -r '.id' 2>/dev/null || echo "")
+          EXISTING_BODY=$(echo "$EXISTING_COMMENT" | jq -r '.body' 2>/dev/null || echo "")
+
+          # Parse previous status from existing comment body
+          if echo "$EXISTING_BODY" | grep -q "No secrets or credentials found"; then
+            PREVIOUS_STATUS="clean"
+          elif echo "$EXISTING_BODY" | grep -q "Potential secrets detected"; then
+            PREVIOUS_STATUS="detected"
+          elif echo "$EXISTING_BODY" | grep -q "Scan completed with warnings"; then
+            PREVIOUS_STATUS="warning"
+          else
+            PREVIOUS_STATUS="unknown"
+          fi
+          echo "📊 Previous status: $PREVIOUS_STATUS | Current status: $SCAN_STATUS"
+        fi
+
+        # Decide whether to update/create comment
+        if [ -n "$EXISTING_COMMENT_ID" ]; then
+          if [ "$PREVIOUS_STATUS" == "$SCAN_STATUS" ]; then
+            echo "⏭️ Status unchanged ($SCAN_STATUS), skipping comment update"
+          else
+            echo "📝 Status changed ($PREVIOUS_STATUS → $SCAN_STATUS), updating comment (ID: $EXISTING_COMMENT_ID)"
+            echo -e "$REPORT" | gh api "/repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
+              --method PATCH \
+              --field body=@-
+          fi
+        else
+          echo "📝 Creating new comment (status: $SCAN_STATUS)"
+          echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
+        fi
       env:
         GH_TOKEN: ${{ inputs.github-token }}
 
