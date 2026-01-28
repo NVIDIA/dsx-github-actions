@@ -145,6 +145,14 @@ runs:
           JOB_URL="$WORKFLOW_URL"
         fi
 
+        # Use the correct commit SHA (PR head commit for pull_request event, otherwise github.sha)
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+        else
+          COMMIT_SHA="${{ github.sha }}"
+        fi
+        SHORT_SHA="${COMMIT_SHA:0:7}"
+
         if [ "$SCAN_STATUS" == "clean" ]; then
           REPORT="${COMMENT_MARKER}
         ## 🔐 TruffleHog Secret Scan
@@ -154,7 +162,7 @@ runs:
 
         🔗 [View scan details]($JOB_URL)
 
-        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${{ github.sha }}</sub>"
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         elif [ "$SCAN_STATUS" == "detected" ]; then
           REPORT="${COMMENT_MARKER}
         ## 🔐 TruffleHog Secret Scan
@@ -193,7 +201,7 @@ runs:
 
         📖 [Learn more about TruffleHog](https://github.com/trufflesecurity/trufflehog)
 
-        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${{ github.sha }}</sub>"
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         else
           # Unknown status or error
           REPORT="${COMMENT_MARKER}
@@ -204,7 +212,7 @@ runs:
 
         🔗 [View scan details]($JOB_URL)
 
-        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${{ github.sha }}</sub>"
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         fi
 
         # Find existing comment from github-actions[bot] with our marker
