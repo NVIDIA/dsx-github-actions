@@ -87,6 +87,9 @@ runs:
       if: inputs.post-pr-comment == 'true'
       shell: bash
       run: |
+        # Marker for finding/updating existing comment
+        COMMENT_MARKER="<!-- dsx-codeql-scan -->"
+
         # Determine if we're in a PR context
         PR_NUMBER=""
         if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -125,6 +128,21 @@ runs:
         # Parse SARIF for issue count and details
         TOTAL_ISSUES=$(jq '[.runs[].results // []] | add | length' "$SARIF_FILE" 2>/dev/null || echo "0")
 
+        # Determine current status
+        if [ "$TOTAL_ISSUES" -eq 0 ]; then
+          CURRENT_STATUS="clean"
+        else
+          CURRENT_STATUS="issues_found"
+        fi
+
+        # Use the correct commit SHA (PR head commit for pull_request event, otherwise github.sha)
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+        else
+          COMMIT_SHA="${{ github.sha }}"
+        fi
+        SHORT_SHA="${COMMIT_SHA:0:7}"
+
         # Determine footer message based on upload-sarif setting
         if [ "${{ inputs.upload-sarif }}" = "true" ]; then
           FOOTER="🔗 [View full details in Security tab](https://github.com/${{ github.repository }}/security/code-scanning)"
@@ -133,17 +151,21 @@ runs:
         fi
 
         if [ "$TOTAL_ISSUES" -eq 0 ]; then
-          REPORT="## 🛡️ CodeQL Analysis
+          REPORT="${COMMENT_MARKER}
+        ## 🛡️ CodeQL Analysis
         ✅ No security issues found!
 
-        $FOOTER"
+        $FOOTER
+
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         else
           # Get severity breakdown
           ERRORS=$(jq '[.runs[].results // [] | .[] | select(.level == "error")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
           WARNINGS=$(jq '[.runs[].results // [] | .[] | select(.level == "warning")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
           NOTES=$(jq '[.runs[].results // [] | .[] | select(.level == "note")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
 
-          REPORT="## 🛡️ CodeQL Analysis
+          REPORT="${COMMENT_MARKER}
+        ## 🛡️ CodeQL Analysis
         🚨 Found **$TOTAL_ISSUES** issue(s)
 
         **Severity Breakdown:**
@@ -158,10 +180,47 @@ runs:
 
         </details>
 
-        $FOOTER"
+        $FOOTER
+
+        <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         fi
 
-        echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
+        # Find existing comment from github-actions[bot] with our marker
+        EXISTING_COMMENT=$(gh api "/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+          --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- dsx-codeql-scan -->")) | {id, body}' \
+          2>/dev/null | head -1 || echo "")
+
+        EXISTING_COMMENT_ID=""
+        PREVIOUS_STATUS=""
+        if [ -n "$EXISTING_COMMENT" ]; then
+          EXISTING_COMMENT_ID=$(echo "$EXISTING_COMMENT" | jq -r '.id' 2>/dev/null || echo "")
+          EXISTING_BODY=$(echo "$EXISTING_COMMENT" | jq -r '.body' 2>/dev/null || echo "")
+
+          # Parse previous status from existing comment body
+          if echo "$EXISTING_BODY" | grep -q "No security issues found"; then
+            PREVIOUS_STATUS="clean"
+          elif echo "$EXISTING_BODY" | grep -q "Found \*\*"; then
+            PREVIOUS_STATUS="issues_found"
+          else
+            PREVIOUS_STATUS="unknown"
+          fi
+          echo "📊 Previous status: $PREVIOUS_STATUS | Current status: $CURRENT_STATUS"
+        fi
+
+        # Decide whether to update/create comment
+        if [ -n "$EXISTING_COMMENT_ID" ]; then
+          if [ "$PREVIOUS_STATUS" == "$CURRENT_STATUS" ]; then
+            echo "⏭️ Status unchanged ($CURRENT_STATUS), skipping comment update"
+          else
+            echo "📝 Status changed ($PREVIOUS_STATUS → $CURRENT_STATUS), updating comment (ID: $EXISTING_COMMENT_ID)"
+            echo -e "$REPORT" | gh api "/repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
+              --method PATCH \
+              --field body=@-
+          fi
+        else
+          echo "📝 Creating new comment (status: $CURRENT_STATUS)"
+          echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
+        fi
       env:
         GH_TOKEN: ${{ inputs.github-token }}
 
