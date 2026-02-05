@@ -1,0 +1,204 @@
+name: security-container-scan
+description: Generate SBOM (Syft) and scan a locally-built container image with Grype, uploading JSON/SARIF reports and writing a summary.
+
+inputs:
+  image:
+    description: 'Local container image reference to scan (must exist on the runner), e.g. "localbuild/testimage:latest"'
+    required: true
+  fail-on:
+    description: 'Minimum severity to fail (passed to grype as --fail-on). One of: negligible, low, medium, high, critical'
+    required: false
+    default: high
+  fail-build:
+    description: 'If true, fail this step when Grype finds vulnerabilities at/above fail-on (or when SBOM/scan prerequisites fail)'
+    required: false
+    default: 'false'
+  grype-image:
+    description: 'Grype container image to run'
+    required: false
+    default: anchore/grype:latest
+  report-json:
+    description: 'Filename for JSON report'
+    required: false
+    default: grype-results.json
+  report-sarif:
+    description: 'Filename for SARIF report'
+    required: false
+    default: grype-results.sarif
+  upload-artifact:
+    description: 'Upload reports as a workflow artifact'
+    required: false
+    default: 'true'
+  artifact-name:
+    description: 'Artifact name for uploaded reports'
+    required: false
+    default: grype-container-scan
+  generate-sbom:
+    description: 'Generate and upload SBOM using anchore/sbom-action'
+    required: false
+    default: 'true'
+  sbom-format:
+    description: 'SBOM format for sbom-action'
+    required: false
+    default: spdx-json
+  sbom-artifact-name:
+    description: 'Artifact name for the SBOM uploaded by sbom-action'
+    required: false
+    default: container.spdx.json
+  write-summary:
+    description: 'Write a human-friendly summary into $GITHUB_STEP_SUMMARY'
+    required: false
+    default: 'true'
+
+outputs:
+  status:
+    description: 'ok | high_or_error | image_not_found | pull_failed | sbom_failed | grype_unknown'
+    value: ${{ steps.final.outputs.status }}
+  detail:
+    description: 'Free-form detail string for status'
+    value: ${{ steps.final.outputs.detail }}
+  report_json:
+    description: 'Path to JSON report (if generated)'
+    value: ${{ steps.final.outputs.report_json }}
+  report_sarif:
+    description: 'Path to SARIF report (if generated)'
+    value: ${{ steps.final.outputs.report_sarif }}
+
+runs:
+  using: composite
+  steps:
+    - name: Precheck local image exists
+      id: precheck
+      shell: bash
+      run: |
+        set +e
+        IMAGE="${{ inputs.image }}"
+        docker image inspect "${IMAGE}" >/dev/null 2>&1
+        rc=$?
+        if [ $rc -eq 0 ]; then
+          echo "image_exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "image_exists=false" >> "$GITHUB_OUTPUT"
+        fi
+        exit 0
+
+    - name: Generate SBOM (Syft via sbom-action)
+      id: sbom
+      if: ${{ inputs.generate-sbom == 'true' && steps.precheck.outputs.image_exists == 'true' }}
+      continue-on-error: true
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ inputs.image }}
+        format: ${{ inputs.sbom-format }}
+        artifact-name: ${{ inputs.sbom-artifact-name }}
+
+    - name: Run Grype scan (JSON + SARIF)
+      id: grype
+      if: ${{ steps.precheck.outputs.image_exists == 'true' }}
+      shell: bash
+      run: |
+        set +e
+        IMAGE="${{ inputs.image }}"
+        REPORT_JSON="${{ inputs.report-json }}"
+        REPORT_SARIF="${{ inputs.report-sarif }}"
+        FAIL_ON="${{ inputs.fail-on }}"
+        GRYPE_IMAGE="${{ inputs.grype-image }}"
+
+        echo "Pulling Grype scanner image..."
+        docker pull "${GRYPE_IMAGE}" >/dev/null 2>&1
+        pull_rc=$?
+        if [ $pull_rc -ne 0 ]; then
+          echo "status=pull_failed" >> "$GITHUB_OUTPUT"
+          echo "exit_code=3" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "Scanning image: ${IMAGE}"
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v "$HOME/.cache/grype:/root/.cache/grype" \
+          "${GRYPE_IMAGE}" \
+          "${IMAGE}" --fail-on "${FAIL_ON}" -o json > "${REPORT_JSON}"
+        scan_rc=$?
+
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v "$HOME/.cache/grype:/root/.cache/grype" \
+          "${GRYPE_IMAGE}" \
+          "${IMAGE}" -o sarif > "${REPORT_SARIF}" || true
+
+        echo "exit_code=${scan_rc}" >> "$GITHUB_OUTPUT"
+        if [ $scan_rc -eq 0 ]; then
+          echo "status=ok" >> "$GITHUB_OUTPUT"
+        else
+          echo "status=high_or_error" >> "$GITHUB_OUTPUT"
+        fi
+        exit 0
+
+    - name: Upload Grype reports
+      if: ${{ inputs.upload-artifact == 'true' && steps.precheck.outputs.image_exists == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          ${{ inputs.report-json }}
+          ${{ inputs.report-sarif }}
+
+    - name: Write scan summary
+      if: ${{ inputs.write-summary == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "### 🔍 Container Scan (SBOM + Grype)" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Image: \`${{ inputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Reports artifact: \`${{ inputs.artifact-name }}\` (sarif + json)" >> "$GITHUB_STEP_SUMMARY"
+
+        if [ -f "${{ inputs.report-json }}" ]; then
+        python3 "$GITHUB_ACTION_PATH/grype_summary.py" --json "${{ inputs.report-json }}" --max-top 10 >> "$GITHUB_STEP_SUMMARY" || true
+        fi
+
+    - name: Finalize status/outputs
+      id: final
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        IMAGE_EXISTS="${{ steps.precheck.outputs.image_exists }}"
+        SBOM_OUTCOME="${{ steps.sbom.outcome }}"
+        GRYPE_STATUS="${{ steps.grype.outputs.status }}"
+        GRYPE_EXIT="${{ steps.grype.outputs.exit_code }}"
+
+        status="ok"
+        detail="ok"
+
+        if [ "${IMAGE_EXISTS}" != "true" ]; then
+          status="image_not_found"
+          detail="local docker image not found"
+        elif [ "${{ inputs.generate-sbom }}" = "true" ] && [ "${SBOM_OUTCOME}" != "success" ]; then
+          status="sbom_failed"
+          detail="sbom-action failed"
+        elif [ -z "${GRYPE_STATUS}" ]; then
+          status="grype_unknown"
+          detail="grype step did not produce status"
+        elif [ "${GRYPE_STATUS}" = "ok" ]; then
+          status="ok"
+          detail="no vulnerabilities at/above fail-on=${{ inputs.fail-on }}"
+        elif [ "${GRYPE_STATUS}" = "high_or_error" ]; then
+          status="high_or_error"
+          detail="grype exit_code=${GRYPE_EXIT} (fail-on=${{ inputs.fail-on }})"
+        else
+          status="${GRYPE_STATUS}"
+          detail="grype exit_code=${GRYPE_EXIT}"
+        fi
+
+        echo "status=${status}" >> "$GITHUB_OUTPUT"
+        echo "detail=${detail}" >> "$GITHUB_OUTPUT"
+        echo "report_json=${{ inputs.report-json }}" >> "$GITHUB_OUTPUT"
+        echo "report_sarif=${{ inputs.report-sarif }}" >> "$GITHUB_OUTPUT"
+
+        if [ "${{ inputs.fail-build }}" = "true" ] && [ "${status}" != "ok" ]; then
+          echo "Failing build due to status=${status}: ${detail}" 1>&2
+          exit 1
+        fi

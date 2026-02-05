@@ -1,0 +1,174 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Docker Build
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Runner label"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      image:
+        description: "Image repository without tag (e.g. nvcr.io/org/app or ghcr.io/org/app)"
+        required: true
+        type: string
+      tags:
+        description: "Tags to apply (comma or newline separated). Each item may be a tag or a full ref."
+        required: false
+        default: ""
+        type: string
+      context:
+        description: "Build context"
+        required: false
+        default: "."
+        type: string
+      dockerfile:
+        description: "Path to Dockerfile"
+        required: false
+        default: "Dockerfile"
+        type: string
+      platforms:
+        description: "Target platforms"
+        required: false
+        default: "linux/amd64,linux/arm64"
+        type: string
+      push:
+        description: "Whether to push image to registry"
+        required: false
+        default: false
+        type: boolean
+      registry:
+        description: "Registry host for docker/login-action (e.g. nvcr.io, ghcr.io). Leave empty for Docker Hub."
+        required: false
+        default: ""
+        type: string
+      cache:
+        description: "Enable GitHub Actions cache (type=gha)"
+        required: false
+        default: true
+        type: boolean
+      cache_scope:
+        description: "Cache scope for GHA cache. Defaults to a sanitized form of image."
+        required: false
+        default: ""
+        type: string
+      build_args:
+        description: "Build args (one per line, KEY=VALUE)"
+        required: false
+        default: ""
+        type: string
+      labels:
+        description: "OCI labels (one per line, key=value)"
+        required: false
+        default: ""
+        type: string
+      target:
+        description: "Build target stage"
+        required: false
+        default: ""
+        type: string
+      provenance:
+        description: "Generate provenance (empty uses docker/build-push-action default)"
+        required: false
+        default: ""
+        type: string
+      sbom:
+        description: "Generate SBOM (empty uses docker/build-push-action default)"
+        required: false
+        default: ""
+        type: string
+      security_scan_enabled:
+        description: "Run security-container-scan (SBOM + Grype) against a locally-built linux/amd64 image before the main build/push"
+        required: false
+        default: false
+        type: boolean
+      security_scan_fail_on_critical:
+        description: "If true, fail the workflow when Critical vulnerabilities are found during the security scan"
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      REGISTRY_USERNAME:
+        description: "Registry username (optional; required only for push+login)"
+        required: false
+      REGISTRY_PASSWORD:
+        description: "Registry password/token (optional; required only for push+login)"
+        required: false
+    outputs:
+      digest:
+        description: "Image digest from build-push-action"
+        value: ${{ jobs.build.outputs.digest }}
+      tags:
+        description: "Normalized fully qualified image refs used for build/push"
+        value: ${{ jobs.build.outputs.tags }}
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.docker.outputs.digest }}
+      tags: ${{ steps.docker.outputs.tags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve dsx-github-actions ref
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          # github.workflow_ref example:
+          #   NVIDIA/dsx-github-actions/.github/workflows/docker-build.yml@v1.2.3
+          wf_ref="${GITHUB_WORKFLOW_REF:-}"
+          ref="${wf_ref##*@}"
+          if [[ -z "${ref}" || "${ref}" == "${wf_ref}" ]]; then
+            ref="main"
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout dsx-github-actions (for local action)
+        uses: actions/checkout@v4
+        with:
+          repository: NVIDIA/dsx-github-actions
+          ref: ${{ steps.resolve.outputs.ref }}
+          path: dsx-github-actions
+
+      - name: Docker build
+        id: docker
+        uses: ./dsx-github-actions/.github/actions/docker-build
+        with:
+          image: ${{ inputs.image }}
+          tags: ${{ inputs.tags }}
+          context: ${{ inputs.context }}
+          dockerfile: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push && 'true' || 'false' }}
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+          cache: ${{ inputs.cache && 'true' || 'false' }}
+          cache-scope: ${{ inputs.cache_scope }}
+          build-args: ${{ inputs.build_args }}
+          labels: ${{ inputs.labels }}
+          target: ${{ inputs.target }}
+          provenance: ${{ inputs.provenance }}
+          sbom: ${{ inputs.sbom }}
+          security-scan-enabled: ${{ inputs.security_scan_enabled && 'true' || 'false' }}
+          security-scan-fail-on-critical: ${{ inputs.security_scan_fail_on_critical && 'true' || 'false' }}

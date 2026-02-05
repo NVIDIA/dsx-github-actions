@@ -1,0 +1,182 @@
+name: "Docker Build"
+description: "Build (and optionally push) OCI images with Buildx, multi-arch, and GHA cache"
+author: "CDS Platform"
+
+inputs:
+  image:
+    description: "Image repository without tag (e.g. nvcr.io/org/app or ghcr.io/org/app)"
+    required: true
+  tags:
+    description: "Tags to apply. Accepts comma or newline separated list. Each item may be a tag (e.g. latest) or a full ref (e.g. ghcr.io/org/app:latest). If omitted, defaults to sha-<shortsha>."
+    required: false
+    default: ""
+  context:
+    description: "Build context"
+    required: false
+    default: "."
+  dockerfile:
+    description: "Path to Dockerfile"
+    required: false
+    default: "Dockerfile"
+  platforms:
+    description: "Target platforms for multi-arch build"
+    required: false
+    default: "linux/amd64,linux/arm64"
+  push:
+    description: "Whether to push image to registry"
+    required: false
+    default: "false"
+  registry:
+    description: "Registry host for docker/login-action (e.g. nvcr.io, ghcr.io). Leave empty for Docker Hub."
+    required: false
+    default: ""
+  username:
+    description: "Registry username for docker/login-action"
+    required: false
+    default: ""
+  password:
+    description: "Registry password/token for docker/login-action"
+    required: false
+    default: ""
+  cache:
+    description: "Enable GitHub Actions cache (type=gha)"
+    required: false
+    default: "true"
+  cache-scope:
+    description: "Cache scope for GHA cache. Defaults to a sanitized form of image."
+    required: false
+    default: ""
+  build-args:
+    description: "Build args (one per line, KEY=VALUE)"
+    required: false
+    default: ""
+  labels:
+    description: "OCI labels (one per line, key=value)"
+    required: false
+    default: ""
+  target:
+    description: "Build target stage"
+    required: false
+    default: ""
+  provenance:
+    description: "Generate provenance (e.g. false, true, mode=max). Empty uses docker/build-push-action default."
+    required: false
+    default: ""
+  sbom:
+    description: "Generate SBOM (e.g. false, true). Empty uses docker/build-push-action default."
+    required: false
+    default: ""
+  security-scan-enabled:
+    description: "If true, build a local linux/amd64 image and run SBOM+Grype scan before the main build/push. Any scan tool failure will fail the action and prevent pushing."
+    required: false
+    default: "false"
+  security-scan-fail-on-critical:
+    description: "If true, fail the action when Critical vulnerabilities are found during security scan."
+    required: false
+    default: "true"
+
+outputs:
+  digest:
+    description: "Image digest from build-push-action"
+    value: ${{ steps.build.outputs.digest }}
+  tags:
+    description: "Normalized fully qualified image refs used for build/push"
+    value: ${{ steps.normalize.outputs.tags }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare scripts
+      shell: bash
+      run: |
+        chmod +x "$GITHUB_ACTION_PATH"/scripts/*.sh
+
+    - name: Normalize tags and cache settings
+      id: normalize
+      shell: bash
+      env:
+        INPUT_IMAGE: ${{ inputs.image }}
+        INPUT_TAGS: ${{ inputs.tags }}
+        INPUT_CACHE_ENABLED: ${{ inputs.cache }}
+        INPUT_CACHE_SCOPE: ${{ inputs.cache-scope }}
+      run: |
+        "$GITHUB_ACTION_PATH"/scripts/normalize-tags.sh
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Prepare security scan vars
+      if: inputs.security-scan-enabled == 'true'
+      id: scan_vars
+      shell: bash
+      run: |
+        set -euo pipefail
+        scan_image="localbuild/dsx-docker-build-scan:${{ github.run_id }}-${{ github.run_attempt }}"
+        echo "scan_image=${scan_image}" >> "$GITHUB_OUTPUT"
+        echo "report_json=${RUNNER_TEMP}/grype-results-${{ github.run_id }}-${{ github.run_attempt }}.json" >> "$GITHUB_OUTPUT"
+        echo "report_sarif=${RUNNER_TEMP}/grype-results-${{ github.run_id }}-${{ github.run_attempt }}.sarif" >> "$GITHUB_OUTPUT"
+        echo "artifact_name=docker-build-scan-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+
+    - name: Pre-scan build (local load, linux/amd64)
+      if: inputs.security-scan-enabled == 'true'
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile }}
+        platforms: linux/amd64
+        push: false
+        load: true
+        tags: ${{ steps.scan_vars.outputs.scan_image }}
+        labels: ${{ inputs.labels }}
+        build-args: ${{ inputs.build-args }}
+        target: ${{ inputs.target }}
+        cache-from: ${{ steps.normalize.outputs.cache-from }}
+        cache-to: ${{ steps.normalize.outputs.cache-to }}
+
+    - name: Precheck local image exists (for scan)
+      if: inputs.security-scan-enabled == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        docker image inspect "${{ steps.scan_vars.outputs.scan_image }}" >/dev/null 2>&1
+
+    - name: Security scan (SBOM + Grype)
+      if: inputs.security-scan-enabled == 'true'
+      id: secscan
+      uses: NVIDIA/dsx-github-actions/.github/actions/security-container-scan@d8d304286ba834f32ff672d5c90782f2bbab4aea
+      with:
+        image: ${{ steps.scan_vars.outputs.scan_image }}
+        fail-on: critical
+        # gate ourselves to support "fail on critical" toggle while still failing on tool errors
+        fail-build: ${{ inputs.security-scan-fail-on-critical }}
+        report-json: ${{ steps.scan_vars.outputs.report_json }}
+        report-sarif: ${{ steps.scan_vars.outputs.report_sarif }}
+        artifact-name: ${{ steps.scan_vars.outputs.artifact_name }}
+
+    - name: Login to registry
+      if: inputs.push == 'true' && inputs.username != '' && inputs.password != ''
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+
+    - name: Build and push
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile }}
+        platforms: ${{ inputs.platforms }}
+        push: ${{ inputs.push }}
+        tags: ${{ steps.normalize.outputs.tags }}
+        labels: ${{ inputs.labels }}
+        build-args: ${{ inputs.build-args }}
+        target: ${{ inputs.target }}
+        provenance: ${{ inputs.provenance }}
+        sbom: ${{ inputs.sbom }}
+        cache-from: ${{ steps.normalize.outputs.cache-from }}
+        cache-to: ${{ steps.normalize.outputs.cache-to }}

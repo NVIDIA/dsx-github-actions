@@ -31,6 +31,41 @@ jobs:
       DEST_PASSWORD: ${{ secrets.GHCR_TOKEN }}
 ```
 
+## Docker Build (`docker-build.yml`)
+
+A reusable workflow wrapper for building (and optionally pushing) OCI images via Docker Buildx. It supports multi-arch builds and GitHub Actions cache (`type=gha`) through the underlying composite action.
+
+### Usage
+
+```yaml
+jobs:
+  build:
+    uses: NVIDIA/dsx-github-actions/.github/workflows/docker-build.yml@main
+    with:
+      runner: ubuntu-latest
+      image: nvcr.io/myorg/myapp
+      tags: |
+        latest
+        sha-${{ github.sha }}
+      push: true
+      registry: nvcr.io
+      security_scan_enabled: true
+      security_scan_fail_on_critical: true
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.NVCR_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.NVCR_TOKEN }}
+```
+
+### Outputs
+
+- `digest`: Image digest
+- `tags`: Normalized fully qualified tags used for build/push
+
+### Security scan options
+
+- `security_scan_enabled`: If true, performs a pre-build security scan on a locally-built `linux/amd64` image before the main build/push.
+- `security_scan_fail_on_critical`: If true, fails the workflow when Critical vulnerabilities are found. Scan tool failures always fail and prevent pushing.
+
 ## Release Workflow (`release.yml`)
 
 Automatically creates semantic version tags and releases when commits are pushed to the `main` branch using [semantic-release](https://github.com/semantic-release/semantic-release).
