@@ -62,6 +62,18 @@ helm_init_package() {
 
   log_info "Chart Version: ${CC_HELM_CHART_VERSION}"
   echo "CC_HELM_CHART_VERSION=$CC_HELM_CHART_VERSION" >> "$GITHUB_ENV"
+
+  [[ -n "${HELM_CHART_APP_VERSION:-}" ]] && CC_HELM_CHART_APP_VERSION="$HELM_CHART_APP_VERSION"
+  if [[ -z "${CC_HELM_CHART_APP_VERSION:-}" ]]; then
+    if [[ -f "${CC_HELM_CHART_PATH:-.}/Chart.yaml" ]]; then
+      CC_HELM_CHART_APP_VERSION=$(yq -r '.appVersion // ""' "${CC_HELM_CHART_PATH:-.}/Chart.yaml")
+    fi
+  fi
+
+  if [[ -n "${CC_HELM_CHART_APP_VERSION:-}" ]]; then
+    log_info "App Version: ${CC_HELM_CHART_APP_VERSION}"
+    echo "CC_HELM_CHART_APP_VERSION=$CC_HELM_CHART_APP_VERSION" >> "$GITHUB_ENV"
+  fi
 }
 
 helm_init_push() {
@@ -200,10 +212,17 @@ helm_template() {
 helm_package() {
   log_info "Packaging ${CC_HELM_CHART_PATH:-.}..."
   mkdir -p "${CC_HELM_PACKAGE_DIR:-package}"
+
+  local app_version_args=()
+  if [[ -n "${CC_HELM_CHART_APP_VERSION:-}" ]]; then
+    app_version_args=(--app-version "${CC_HELM_CHART_APP_VERSION}")
+  fi
+
   helm package \
     --destination "${CC_HELM_PACKAGE_DIR:-package}" \
     --dependency-update \
     --version "${CC_HELM_CHART_VERSION}" \
+    "${app_version_args[@]}" \
     "${CC_HELM_CHART_PATH:-.}"
 }
 
