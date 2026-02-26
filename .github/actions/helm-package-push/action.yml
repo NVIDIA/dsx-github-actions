@@ -17,6 +17,10 @@ inputs:
     description: "Whether to lint the Helm Chart"
     required: false
     default: "false"
+  app-version:
+    description: "Set the appVersion of the Helm Chart"
+    required: false
+    default: ""
   extra-repos:
     description: "Extra repositories for packaging"
     required: false
@@ -75,6 +79,7 @@ runs:
       env:
         HELM_CHART_VERSION: ${{ inputs.chart-version }}
         HELM_CHART_VERSION_SUFFIX: ${{ inputs.chart-version-suffix }}
+        HELM_CHART_APP_VERSION: ${{ inputs.app-version }}
         CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
       run: |
         UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
