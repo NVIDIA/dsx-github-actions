@@ -22,6 +22,7 @@ steps:
 | --- | --- | --- | --- |
 | `chart-version` | Set the version of the Helm Chart | No | (from Chart.yaml) |
 | `chart-version-suffix` | Set the version suffix | No | "" |
+| `app-version` | Set the appVersion of the Helm Chart | No | (from Chart.yaml) |
 | `chart-path` | Root directory for the Helm Chart | No | . |
 | `lint` | Whether to lint | No | false |
 | `extra-repos` | Extra repositories | No | [] |
