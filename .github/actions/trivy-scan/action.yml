@@ -60,6 +60,10 @@ inputs:
     description: 'GitHub token for uploading SARIF results'
     required: false
     default: ${{ github.token }}
+  compare-base-ref:
+    description: 'Base branch to compare vulnerability count against via Code Scanning API (requires upload-sarif: true and GHAS). Empty string disables comparison.'
+    required: false
+    default: 'main'
 
 runs:
   using: 'composite'
@@ -124,6 +128,58 @@ runs:
         # Parse SARIF for issue count and details
         TOTAL_ISSUES=$(jq '[.runs[].results // []] | add | length' "$SARIF_FILE" 2>/dev/null || echo "0")
 
+        # --- Compare with main branch baseline via Code Scanning API ---
+        MAIN_COUNT=""
+        DELTA_LINE=""
+        GHAS_HINT=""
+        if [ "${{ inputs.upload-sarif }}" = "true" ] && [ -n "${{ inputs.compare-base-ref }}" ]; then
+          TOOL_NAME=$(jq -r '.runs[0].tool.driver.name // "Trivy"' "$SARIF_FILE" 2>/dev/null)
+          BASE_REF="${{ inputs.compare-base-ref }}"
+          echo "🔍 Checking ${BASE_REF} branch baseline (tool: ${TOOL_NAME})..."
+
+          # Verify baseline branch has been analyzed (also tests if GHAS is enabled)
+          HAS_BASELINE=$(gh api \
+            "/repos/${{ github.repository }}/code-scanning/analyses?ref=refs/heads/${BASE_REF}&tool_name=${TOOL_NAME}&per_page=1" \
+            --jq 'length' 2>/dev/null || echo "0")
+
+          if [ "${HAS_BASELINE:-0}" -gt 0 ] 2>/dev/null; then
+            MAIN_API_OUTPUT=$(gh api --paginate \
+              "/repos/${{ github.repository }}/code-scanning/alerts?ref=refs/heads/${BASE_REF}&tool_name=${TOOL_NAME}&state=open&per_page=100" \
+              --jq '.[] | .number' 2>/dev/null)
+            if [ $? -eq 0 ]; then
+              if [ -z "$MAIN_API_OUTPUT" ]; then
+                MAIN_COUNT=0
+              else
+                MAIN_COUNT=$(echo "$MAIN_API_OUTPUT" | wc -l | tr -d ' ')
+              fi
+              DELTA=$((TOTAL_ISSUES - MAIN_COUNT))
+              if [ "$DELTA" -gt 0 ]; then
+                DELTA_LINE="
+        📊 **vs ${BASE_REF}:** ${MAIN_COUNT} → ${TOTAL_ISSUES} (🔺 **+${DELTA} new**)"
+              elif [ "$DELTA" -lt 0 ]; then
+                DELTA_LINE="
+        📊 **vs ${BASE_REF}:** ${MAIN_COUNT} → ${TOTAL_ISSUES} (🟢 **${DELTA} fixed**)"
+              else
+                DELTA_LINE="
+        📊 **vs ${BASE_REF}:** ${MAIN_COUNT} (no change)"
+              fi
+              echo "📊 Baseline (${BASE_REF}): $MAIN_COUNT | Current: $TOTAL_ISSUES | Delta: $DELTA"
+            else
+              echo "⚠️ Failed to fetch baseline alerts from Code Scanning API"
+              GHAS_HINT="
+        <sub>💡 Enable [GitHub Advanced Security](https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security) and \`upload-sarif\` to compare against the ${BASE_REF} branch baseline.</sub>"
+            fi
+          else
+            echo "ℹ️ No baseline scan found for ${BASE_REF} branch (GHAS not enabled or no previous scan), skipping comparison"
+            GHAS_HINT="
+        <sub>💡 Enable [GitHub Advanced Security](https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security) and \`upload-sarif\` to compare against the ${BASE_REF} branch baseline.</sub>"
+          fi
+        elif [ -n "${{ inputs.compare-base-ref }}" ]; then
+          BASE_REF="${{ inputs.compare-base-ref }}"
+          GHAS_HINT="
+        <sub>💡 Enable [GitHub Advanced Security](https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security) and \`upload-sarif\` to compare against the ${BASE_REF} branch baseline.</sub>"
+        fi
+
         # Use the correct commit SHA (PR head commit for pull_request event, otherwise github.sha)
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
@@ -141,13 +197,19 @@ runs:
 
         COUNT_MARKER="<!-- dsx-trivy-count:${TOTAL_ISSUES} -->"
 
+        # Build footer line with optional GHAS hint (only when baseline comparison is unavailable)
+        FOOTER_LINE="$FOOTER"
+        if [ -z "$DELTA_LINE" ] && [ -n "$GHAS_HINT" ]; then
+          FOOTER_LINE="${FOOTER}${GHAS_HINT}"
+        fi
+
         if [ "$TOTAL_ISSUES" -eq 0 ]; then
           REPORT="${COMMENT_MARKER}
         ${COUNT_MARKER}
         ## 🛡️ Vulnerability Scan
-        ✅ No vulnerabilities found!
+        ✅ No vulnerabilities found!${DELTA_LINE}
 
-        $FOOTER
+        ${FOOTER_LINE}
 
         <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         else
@@ -159,7 +221,7 @@ runs:
           REPORT="${COMMENT_MARKER}
         ${COUNT_MARKER}
         ## 🛡️ Vulnerability Scan
-        🚨 Found **$TOTAL_ISSUES** vulnerability(ies)
+        🚨 Found **$TOTAL_ISSUES** vulnerability(ies)${DELTA_LINE}
 
         **Severity Breakdown:**
         - 🔴 Critical/High: $CRITICAL
@@ -173,7 +235,7 @@ runs:
 
         </details>
 
-        $FOOTER
+        ${FOOTER_LINE}
 
         <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
         fi
