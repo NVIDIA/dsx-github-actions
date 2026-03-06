@@ -124,13 +124,6 @@ runs:
         # Parse SARIF for issue count and details
         TOTAL_ISSUES=$(jq '[.runs[].results // []] | add | length' "$SARIF_FILE" 2>/dev/null || echo "0")
 
-        # Determine current status
-        if [ "$TOTAL_ISSUES" -eq 0 ]; then
-          CURRENT_STATUS="clean"
-        else
-          CURRENT_STATUS="issues_found"
-        fi
-
         # Use the correct commit SHA (PR head commit for pull_request event, otherwise github.sha)
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
@@ -146,8 +139,11 @@ runs:
           FOOTER="💡 **Note**: Enable GitHub Advanced Security to see full details in the Security tab."
         fi
 
+        COUNT_MARKER="<!-- dsx-trivy-count:${TOTAL_ISSUES} -->"
+
         if [ "$TOTAL_ISSUES" -eq 0 ]; then
           REPORT="${COMMENT_MARKER}
+        ${COUNT_MARKER}
         ## 🛡️ Vulnerability Scan
         ✅ No vulnerabilities found!
 
@@ -161,6 +157,7 @@ runs:
           MEDIUM=$(jq '[.runs[].results // [] | .[] | select(.level == "note")] | length' "$SARIF_FILE" 2>/dev/null || echo "0")
 
           REPORT="${COMMENT_MARKER}
+        ${COUNT_MARKER}
         ## 🛡️ Vulnerability Scan
         🚨 Found **$TOTAL_ISSUES** vulnerability(ies)
 
@@ -187,34 +184,38 @@ runs:
           2>/dev/null | head -1 || echo "")
 
         EXISTING_COMMENT_ID=""
-        PREVIOUS_STATUS=""
+        PREVIOUS_COUNT=""
         if [ -n "$EXISTING_COMMENT" ]; then
           EXISTING_COMMENT_ID=$(echo "$EXISTING_COMMENT" | jq -r '.id' 2>/dev/null || echo "")
           EXISTING_BODY=$(echo "$EXISTING_COMMENT" | jq -r '.body' 2>/dev/null || echo "")
 
-          # Parse previous status from existing comment body
-          if echo "$EXISTING_BODY" | grep -q "No vulnerabilities found"; then
-            PREVIOUS_STATUS="clean"
-          elif echo "$EXISTING_BODY" | grep -q "Found \*\*"; then
-            PREVIOUS_STATUS="issues_found"
-          else
-            PREVIOUS_STATUS="unknown"
+          # Parse previous issue count: try hidden marker first, then fall back to comment text
+          PREVIOUS_COUNT=$(echo "$EXISTING_BODY" | grep -oP '(?<=<!-- dsx-trivy-count:)\d+(?= -->)' 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_COUNT" ]; then
+            if echo "$EXISTING_BODY" | grep -q "No vulnerabilities found"; then
+              PREVIOUS_COUNT="0"
+            else
+              PREVIOUS_COUNT=$(echo "$EXISTING_BODY" | grep -oP '(?<=Found \*\*)\d+(?=\*\*)' 2>/dev/null || echo "")
+            fi
           fi
-          echo "📊 Previous status: $PREVIOUS_STATUS | Current status: $CURRENT_STATUS"
+          if [ -z "$PREVIOUS_COUNT" ]; then
+            PREVIOUS_COUNT="unknown"
+          fi
+          echo "📊 Previous count: $PREVIOUS_COUNT | Current count: $TOTAL_ISSUES"
         fi
 
         # Decide whether to update/create comment
         if [ -n "$EXISTING_COMMENT_ID" ]; then
-          if [ "$PREVIOUS_STATUS" == "$CURRENT_STATUS" ]; then
-            echo "⏭️ Status unchanged ($CURRENT_STATUS), skipping comment update"
+          if [ "$PREVIOUS_COUNT" == "$TOTAL_ISSUES" ]; then
+            echo "⏭️ Issue count unchanged ($TOTAL_ISSUES), skipping comment update"
           else
-            echo "📝 Status changed ($PREVIOUS_STATUS → $CURRENT_STATUS), updating comment (ID: $EXISTING_COMMENT_ID)"
+            echo "📝 Issue count changed ($PREVIOUS_COUNT → $TOTAL_ISSUES), updating comment (ID: $EXISTING_COMMENT_ID)"
             echo -e "$REPORT" | gh api "/repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
               --method PATCH \
               --field body=@-
           fi
         else
-          echo "📝 Creating new comment (status: $CURRENT_STATUS)"
+          echo "📝 Creating new comment (issues: $TOTAL_ISSUES)"
           echo -e "$REPORT" | gh pr comment "$PR_NUMBER" --body-file=-
         fi
       env:
