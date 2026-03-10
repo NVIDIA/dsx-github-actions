@@ -1,0 +1,131 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Stale Issue and PR Management
+#
+# Automatically marks inactive issues/PRs as stale and eventually closes them.
+# This keeps the issue tracker focused on active work.
+#
+# Timelines (defaults):
+#   Issues: 60 days -> stale, 14 more days -> closed
+#   PRs: 30 days -> stale, 14 more days -> closed
+#
+# Exemptions (defaults):
+#   - lifecycle/frozen: Never goes stale
+#   - priority/critical: Never goes stale (issues only)
+#   - do-not-merge: PR won't be closed
+#
+# Required permissions in calling workflow:
+#   issues: write
+#   pull-requests: write
+#
+# Pattern from: gpu-operator
+
+name: 'Stale Issues and PRs'
+description: 'Marks inactive issues and PRs as stale and eventually closes them to keep the tracker focused on active work'
+
+inputs:
+  days-before-issue-stale:
+    description: 'Days of inactivity before an issue is marked stale'
+    required: false
+    default: '60'
+  days-before-pr-stale:
+    description: 'Days of inactivity before a PR is marked stale'
+    required: false
+    default: '30'
+  days-before-close:
+    description: 'Days after stale label before closing'
+    required: false
+    default: '14'
+  stale-issue-label:
+    description: 'Label to apply to stale issues'
+    required: false
+    default: 'lifecycle/stale'
+  stale-pr-label:
+    description: 'Label to apply to stale PRs'
+    required: false
+    default: 'lifecycle/stale'
+  exempt-issue-labels:
+    description: 'Comma-separated labels that exempt issues from being marked stale'
+    required: false
+    default: 'lifecycle/frozen,priority/critical,good first issue'
+  exempt-pr-labels:
+    description: 'Comma-separated labels that exempt PRs from being marked stale'
+    required: false
+    default: 'lifecycle/frozen,do-not-merge'
+  stale-issue-message:
+    description: 'Message posted when an issue is marked stale'
+    required: false
+    default: |
+      This issue has been marked as stale due to 60 days of inactivity.
+      It will be closed in 14 days unless there is new activity.
+
+      To keep this issue open:
+      - Add a comment with an update
+      - Add the `lifecycle/frozen` label
+
+      If this issue is no longer relevant, it's okay to let it close.
+  stale-pr-message:
+    description: 'Message posted when a PR is marked stale'
+    required: false
+    default: |
+      This PR has been marked as stale due to 30 days of inactivity.
+      It will be closed in 14 days unless there is new activity.
+
+      To keep this PR open:
+      - Push new commits or add a comment
+      - Add the `lifecycle/frozen` label
+
+      If this work is no longer needed, it's okay to let it close.
+  close-issue-message:
+    description: 'Message posted when a stale issue is closed'
+    required: false
+    default: |
+      This issue was automatically closed due to inactivity after being marked as stale.
+
+      If you believe this issue is still relevant:
+      - Reopen with a comment providing updated details or context
+      - Add the `lifecycle/frozen` label to prevent it from being closed again
+  close-pr-message:
+    description: 'Message posted when a stale PR is closed'
+    required: false
+    default: |
+      This pull request was automatically closed due to inactivity after being marked as stale.
+
+      If you would like to continue this work:
+      - Reopen and push new commits or add a comment with an update
+      - Add the `lifecycle/frozen` label to prevent it from being closed again
+  operations-per-run:
+    description: 'Maximum number of operations per run (API budget)'
+    required: false
+    default: '500'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Mark stale issues and PRs
+      uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f  # v10.2.0
+      with:
+        stale-issue-message: ${{ inputs.stale-issue-message }}
+        days-before-stale: ${{ inputs.days-before-issue-stale }}
+        stale-issue-label: ${{ inputs.stale-issue-label }}
+        exempt-issue-labels: ${{ inputs.exempt-issue-labels }}
+        stale-pr-message: ${{ inputs.stale-pr-message }}
+        days-before-pr-stale: ${{ inputs.days-before-pr-stale }}
+        stale-pr-label: ${{ inputs.stale-pr-label }}
+        exempt-pr-labels: ${{ inputs.exempt-pr-labels }}
+        close-issue-message: ${{ inputs.close-issue-message }}
+        close-pr-message: ${{ inputs.close-pr-message }}
+        days-before-close: ${{ inputs.days-before-close }}
+        operations-per-run: ${{ inputs.operations-per-run }}
