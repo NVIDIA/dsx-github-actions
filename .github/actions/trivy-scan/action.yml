@@ -70,7 +70,7 @@ runs:
   steps:
     - name: Run Trivy Scan
       continue-on-error: true
-      uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1, use sha to align security guidelines
+      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0, use sha to align security guidelines
       with:
         scan-type: ${{ inputs.scan-type }}
         scan-ref: ${{ inputs.scan-ref }}
@@ -227,13 +227,6 @@ runs:
         - 🔴 Critical/High: $CRITICAL
         - 🟡 Medium: $HIGH
         - 🔵 Low/Info: $MEDIUM
-
-        <details>
-        <summary>📋 Top Vulnerabilities</summary>
-
-        $(jq -r '[.runs[].results // [] | .[] | select(.level == "error" or .level == "warning")] | .[0:10] | .[] | "- **\(.ruleId // "unknown")**: \(.message.text // "No description") (\(.locations[0].physicalLocation.artifactLocation.uri // "unknown"))"' "$SARIF_FILE" 2>/dev/null || echo "No details available")
-
-        </details>
 
         ${FOOTER_LINE}
 
