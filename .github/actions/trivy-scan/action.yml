@@ -228,13 +228,6 @@ runs:
         - 🟡 Medium: $HIGH
         - 🔵 Low/Info: $MEDIUM
 
-        <details>
-        <summary>📋 Top Vulnerabilities</summary>
-
-        $(jq -r '[.runs[].results // [] | .[] | select(.level == "error" or .level == "warning")] | .[0:10] | .[] | "- **\(.ruleId // "unknown")**: \(.message.text // "No description") (\(.locations[0].physicalLocation.artifactLocation.uri // "unknown"))"' "$SARIF_FILE" 2>/dev/null || echo "No details available")
-
-        </details>
-
         ${FOOTER_LINE}
 
         <sub>🕐 Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | Commit: ${SHORT_SHA}</sub>"
