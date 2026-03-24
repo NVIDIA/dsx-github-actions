@@ -95,7 +95,7 @@ runs:
 
     - name: Upload SARIF Report
       if: steps.check_sarif.outputs.exists == 'true' && inputs.upload-sarif == 'true'
-      uses: github/codeql-action/upload-sarif@v4.31.5
+      uses: github/codeql-action/upload-sarif@fdbfb4d2750291e159f0156def62b853c2798ca2 # v4.31.5
       with:
         sarif_file: 'vulnerability-scan-results.sarif'
         token: ${{ inputs.github-token }}
