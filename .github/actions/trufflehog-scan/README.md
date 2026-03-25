@@ -388,11 +388,8 @@ jobs:
           languages: "go"
           post-pr-comment: "true"
 
-      # Vulnerability scanning
-      - name: Vulnerability Scan
-        uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
-        with:
-          post-pr-comment: "true"
+      # Note: trivy-scan has been removed due to the 2026-03 supply chain compromise.
+      # See: https://github.com/aquasecurity/trivy/discussions/10425
 ```
 
 ## Troubleshooting
@@ -551,23 +548,12 @@ git filter-repo --path-glob '**/*.env' --invert-paths
 - Use secret management tools (Vault, AWS Secrets Manager, etc.)
 - Enable git hooks to scan before commit
 
-## Integration with Trivy Secret Scanning
+## Note on Trivy
 
-TruffleHog complements the Trivy secret scanning in `trivy-scan` action:
+The `trivy-scan` action has been removed due to a supply chain compromise discovered in March 2026.
+See: https://github.com/aquasecurity/trivy/discussions/10425
 
-| Tool              | Strengths                                           | When to Use                          |
-| ----------------- | --------------------------------------------------- | ------------------------------------ |
-| **TruffleHog**    | 700+ detectors, verifies secrets, scans git history | Primary secret scanning              |
-| **Trivy Secrets** | Fast, integrated with vuln scan, SARIF output       | Combined with vulnerability scanning |
-
-**Recommendation**: Use both for comprehensive coverage:
-
-```yaml
-- uses: NVIDIA/dsx-github-actions/.github/actions/trufflehog-scan@main
-- uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
-  with:
-    scanners: "vuln,secret,misconfig"
-```
+TruffleHog is now the sole secret scanning tool in this workflow.
 
 ## Version Pinning
 
