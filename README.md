@@ -7,7 +7,6 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | Action                                                  | Description                       | Use Case                          |
 | ------------------------------------------------------- | --------------------------------- | --------------------------------- |
 | [codeql-scan](.github/actions/codeql-scan/)             | Static code analysis with CodeQL  | Security vulnerability detection  |
-| [trivy-scan](.github/actions/trivy-scan/)               | Vulnerability scanning with Trivy | Dependency and container scanning |
 | [trufflehog-scan](.github/actions/trufflehog-scan/)     | Secret scanning with TruffleHog   | Leaked credentials detection      |
 | [semantic-release](.github/actions/semantic-release/)   | Automated versioning and releases | Semantic versioning and changelog |
 | [resource-push-ngc](.github/actions/resource-push-ngc/) | Push resources to NGC             | Artifact publishing               |
@@ -24,7 +23,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 
 ## ⚠️ Important: GitHub Advanced Security Required
 
-The security scanning actions (`codeql-scan` and `trivy-scan`) upload results to GitHub's Code Scanning feature, which **requires GitHub Advanced Security (GHAS)** to be enabled:
+The security scanning action (`codeql-scan`) uploads results to GitHub's Code Scanning feature, which **requires GitHub Advanced Security (GHAS)** to be enabled:
 
 - ✅ **Public repositories**: Free and automatically available
 - ⚠️ **Private repositories**: Requires GHAS license
@@ -32,7 +31,9 @@ The security scanning actions (`codeql-scan` and `trivy-scan`) upload results to
 Without GHAS enabled, scans will run successfully but uploads will fail. See individual action documentation for workarounds and details:
 
 - [CodeQL Prerequisites](.github/actions/codeql-scan/README.md#️-prerequisites)
-- [Vuln Scan Prerequisites](.github/actions/trivy-scan/README.md#️-prerequisites)
+
+> **Note**: `trivy-scan` has been removed due to a supply chain compromise (March 2026).
+> See: https://github.com/aquasecurity/trivy/discussions/10425
 
 ## 📖 Quick Start
 
@@ -58,12 +59,6 @@ jobs:
         with:
           languages: "rust"
           build-command: "cargo build --workspace"
-
-      - name: Vulnerability Scan
-        uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
-        with:
-          severity: "HIGH,CRITICAL"
-          skip-dirs: "target,vendor"
 ```
 
 ### Security Scanning (Go)
@@ -74,20 +69,6 @@ jobs:
   with:
     languages: "go"
     build-command: "go build ./..."
-
-- name: Vulnerability Scan
-  uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
-```
-
-### Container Scanning
-
-```yaml
-- name: Scan Container Image
-  uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
-  with:
-    scan-type: "image"
-    scan-ref: "nvcr.io/myorg/myapp:v1.0.0"
-    severity: "CRITICAL,HIGH"
 ```
 
 ### Image Promotion
@@ -121,7 +102,6 @@ This reusable workflow wraps `skopeo copy`, so it copies the entire manifest lis
 ## 📚 Documentation
 
 - [CodeQL Scan Action](.github/actions/codeql-scan/README.md)
-- [Trivy Scan Action](.github/actions/trivy-scan/README.md)
 - [TruffleHog Secret Scan Action](.github/actions/trufflehog-scan/README.md)
 - [Semantic Release Action](.github/actions/semantic-release/README.md)
 - [Resource Push NGC Action](.github/actions/resource-push-ngc/README.md)
@@ -133,7 +113,7 @@ This reusable workflow wraps `skopeo copy`, so it copies the entire manifest lis
 
 - ✅ **Composite Actions**: Lightweight, reusable, and flexible
 - ✅ **Multi-language Support**: Go, Rust, Python, JavaScript, C++, Java, C#
-- ✅ **Comprehensive Security**: CodeQL, Trivy, and TruffleHog scanning
+- ✅ **Comprehensive Security**: CodeQL and TruffleHog scanning
 - ✅ **Secret Detection**: 700+ credential types with verification
 - ✅ **Security Integration**: Automatic SARIF upload to GitHub Security tab
 - ✅ **PR Comments**: Automated security findings on pull requests
@@ -252,10 +232,6 @@ jobs:
           languages: "go"
           post-pr-comment: "true"
 
-      # Vulnerability scanning
-      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@55d1e0af17fb4431edaca19fbd5c78fecd29d18a
-        with:
-          post-pr-comment: "true"
 ```
 
 ### Example 2: Separate Jobs for Long Scans
@@ -275,17 +251,9 @@ jobs:
           languages: "rust"
           build-command: "cargo build --workspace"
 
-  trivy-scan:
-    runs-on: linux-amd64-cpu4
-    permissions:
-      security-events: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
 ```
 
-### Example 3: Container Build + Scan
+### Example 3: Container Build + Secret Scan
 
 ```yaml
 jobs:
@@ -293,7 +261,6 @@ jobs:
     runs-on: linux-amd64-cpu4
     permissions:
       contents: read
-      security-events: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -308,14 +275,6 @@ jobs:
 
       - name: Build Container
         run: docker build -t myapp:${{ github.sha }} .
-
-      # Scan container for vulnerabilities
-      - name: Scan Container
-        uses: NVIDIA/dsx-github-actions/.github/actions/trivy-scan@main
-        with:
-          scan-type: "image"
-          scan-ref: "myapp:${{ github.sha }}"
-          post-pr-comment: "true"
 ```
 
 ## 🧹 Developer Workflow
@@ -345,7 +304,6 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
 .github/
 ├── actions/
 │   ├── codeql-scan/        # Static code analysis (CodeQL)
-│   ├── trivy-scan/         # Vulnerability scanning (Trivy)
 │   ├── trufflehog-scan/    # Secret scanning (TruffleHog)
 │   ├── docker-build/       # Docker build/push wrapper
 │   ├── semantic-release/   # Automated versioning and releases

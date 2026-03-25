@@ -12,7 +12,6 @@
     "nvidia",
     "security",
     "codeql",
-    "trivy",
     "trufflehog"
   ],
   "author": "NVIDIA Corporation",
