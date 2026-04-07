@@ -1,0 +1,99 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'License Headers Check'
+description: 'Check (and optionally add) SPDX license headers using addlicense'
+
+inputs:
+  license:
+    description: 'License type (apache, mit, bsd)'
+    required: false
+    default: 'apache'
+  copyright-holder:
+    description: 'Copyright holder string'
+    required: false
+    default: 'NVIDIA CORPORATION & AFFILIATES. All rights reserved.'
+  year:
+    description: 'Copyright year'
+    required: false
+    default: '2026'
+  paths:
+    description: 'Space-separated paths to check (e.g., "src/ pkg/ cmd/")'
+    required: false
+    default: '.'
+  ignore:
+    description: 'Comma-separated glob patterns to ignore (e.g., "vendor/**,tests/**")'
+    required: false
+    default: 'vendor/**'
+  check-only:
+    description: 'Only check headers (fail if missing). Set to false to auto-add missing headers.'
+    required: false
+    default: 'true'
+  addlicense-version:
+    description: 'addlicense tool version'
+    required: false
+    default: 'v1.2.0'
+  go-version:
+    description: 'Go version for installing addlicense. If empty, uses existing Go installation.'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      if: inputs.go-version != ''
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: false
+
+    - name: Install addlicense
+      shell: bash
+      run: go install github.com/google/addlicense@${{ inputs.addlicense-version }}
+
+    - name: Check license headers
+      shell: bash
+      run: |
+        # Build ignore flags
+        IGNORE_FLAGS=""
+        IFS=',' read -ra PATTERNS <<< "${{ inputs.ignore }}"
+        for pattern in "${PATTERNS[@]}"; do
+          pattern=$(echo "$pattern" | xargs) # trim whitespace
+          if [ -n "$pattern" ]; then
+            IGNORE_FLAGS="${IGNORE_FLAGS} -ignore ${pattern}"
+          fi
+        done
+
+        # Build mode flag
+        if [ "${{ inputs.check-only }}" = "true" ]; then
+          MODE="-check"
+          echo "Checking license headers (check-only mode)..."
+        else
+          MODE=""
+          echo "Adding missing license headers..."
+        fi
+
+        # Run addlicense
+        # shellcheck disable=SC2086
+        addlicense \
+          -l "${{ inputs.license }}" \
+          -c "${{ inputs.copyright-holder }}" \
+          -s=only \
+          -y "${{ inputs.year }}" \
+          ${IGNORE_FLAGS} \
+          ${MODE} \
+          ${{ inputs.paths }}
+
+        echo "License headers check passed."
