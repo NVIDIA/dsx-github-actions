@@ -63,7 +63,7 @@ runs:
         GOFLAGS: ${{ inputs.go-flags }}
       run: |
         echo "::group::go fmt"
-        UNFMT=$(gofmt -l . 2>&1 || true)
+        UNFMT=$(find . -name '*.go' -not -path './vendor/*' -exec gofmt -l {} + 2>&1 || true)
         if [ -n "$UNFMT" ]; then
           echo "::error::The following files are not formatted:"
           echo "$UNFMT"
@@ -83,6 +83,7 @@ runs:
         echo "::group::go vet"
         go vet ./...
         echo "::endgroup::"
+        # Note: go vet ./... already skips vendor/ by default
 
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v7
