@@ -65,35 +65,39 @@ runs:
 
     - name: Check license headers
       shell: bash
+      env:
+        INPUT_LICENSE: ${{ inputs.license }}
+        INPUT_COPYRIGHT: ${{ inputs.copyright-holder }}
+        INPUT_YEAR: ${{ inputs.year }}
+        INPUT_IGNORE: ${{ inputs.ignore }}
+        INPUT_CHECK_ONLY: ${{ inputs.check-only }}
+        INPUT_PATHS: ${{ inputs.paths }}
       run: |
-        # Build ignore flags
-        IGNORE_FLAGS=""
-        IFS=',' read -ra PATTERNS <<< "${{ inputs.ignore }}"
+        # Build command as an array to preserve flag boundaries
+        CMD=(addlicense -l "$INPUT_LICENSE" -c "$INPUT_COPYRIGHT" -s=only -y "$INPUT_YEAR")
+
+        # Add ignore flags
+        IFS=',' read -ra PATTERNS <<< "$INPUT_IGNORE"
         for pattern in "${PATTERNS[@]}"; do
           pattern=$(echo "$pattern" | xargs) # trim whitespace
           if [ -n "$pattern" ]; then
-            IGNORE_FLAGS="${IGNORE_FLAGS} -ignore ${pattern}"
+            CMD+=(-ignore "$pattern")
           fi
         done
 
-        # Build mode flag
-        if [ "${{ inputs.check-only }}" = "true" ]; then
-          MODE="-check"
+        # Add check flag
+        if [ "$INPUT_CHECK_ONLY" = "true" ]; then
+          CMD+=(-check)
           echo "Checking license headers (check-only mode)..."
         else
-          MODE=""
           echo "Adding missing license headers..."
         fi
 
-        # Run addlicense
-        # shellcheck disable=SC2086
-        addlicense \
-          -l "${{ inputs.license }}" \
-          -c "${{ inputs.copyright-holder }}" \
-          -s=only \
-          -y "${{ inputs.year }}" \
-          ${IGNORE_FLAGS} \
-          ${MODE} \
-          ${{ inputs.paths }}
+        # Add paths last (positional args must come after flags)
+        # shellcheck disable=SC2206
+        CMD+=($INPUT_PATHS)
+
+        # Run
+        "${CMD[@]}"
 
         echo "License headers check passed."
