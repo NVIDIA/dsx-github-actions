@@ -31,7 +31,7 @@ inputs:
   golangci-lint-version:
     description: 'golangci-lint version to use'
     required: false
-    default: 'v2.1'
+    default: 'v2.11'
   golangci-lint-args:
     description: 'Additional arguments for golangci-lint run'
     required: false
