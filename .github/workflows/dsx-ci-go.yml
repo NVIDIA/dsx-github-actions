@@ -13,8 +13,17 @@
 # limitations under the License.
 
 # Reusable CI workflow for DSX Go projects.
-# Each job checks out the caller's repo + dsx-github-actions at the same
-# ref used by the caller, so pinning the workflow ref pins all actions.
+#
+# IMPORTANT: actions-ref must match the ref used to call this workflow.
+# GitHub Actions does not provide a way for reusable workflows to know
+# which ref they were called with -- uses: requires a static string and
+# relative paths (./) resolve to the caller's repo, not this one.
+# This is a known GitHub Actions platform limitation.
+#
+# Example:
+#   uses: NVIDIA/dsx-github-actions/.github/workflows/dsx-ci-go.yml@v1.15.0
+#   with:
+#     actions-ref: v1.15.0  # must match the @ref above
 
 name: DSX Go CI
 
