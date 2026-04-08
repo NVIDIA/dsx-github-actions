@@ -49,10 +49,10 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
         go-version: ${{ inputs.go-version }}
-        go-version-file: ${{ inputs.go-version == '' && inputs.go-version-file || '' }}
+        go-version-file: ${{ inputs.go-version == '' && format('{0}/{1}', inputs.working-directory, inputs.go-version-file) || '' }}
         cache: true
         cache-dependency-path: ${{ inputs.working-directory }}/go.sum
 
@@ -63,7 +63,13 @@ runs:
         GOFLAGS: ${{ inputs.go-flags }}
       run: |
         echo "::group::go fmt"
-        UNFMT=$(find . -name '*.go' -not -path './vendor/*' -exec gofmt -l {} + 2>&1 || true)
+        UNFMT=$(find . -name '*.go' -not -path './vendor/*' -exec gofmt -l {} + 2>&1)
+        FIND_EXIT=$?
+        if [ "$FIND_EXIT" -ne 0 ] && [ -z "$UNFMT" ]; then
+          echo "::error::gofmt check failed unexpectedly (exit code $FIND_EXIT)"
+          echo "::endgroup::"
+          exit 1
+        fi
         if [ -n "$UNFMT" ]; then
           echo "::error::The following files are not formatted:"
           echo "$UNFMT"
@@ -86,7 +92,7 @@ runs:
         # Note: go vet ./... already skips vendor/ by default
 
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v7
+      uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
       with:
         version: ${{ inputs.golangci-lint-version }}
         working-directory: ${{ inputs.working-directory }}

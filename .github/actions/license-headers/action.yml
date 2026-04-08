@@ -43,7 +43,7 @@ inputs:
   addlicense-version:
     description: 'addlicense tool version'
     required: false
-    default: 'v1.2.0'
+    default: 'b289835c0741ba2fb92dd5f61af070e79c69a55e' # v1.2.0
   go-version:
     description: 'Go version for installing addlicense. If empty, uses existing Go installation.'
     required: false
@@ -54,14 +54,16 @@ runs:
   steps:
     - name: Set up Go
       if: inputs.go-version != ''
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
         go-version: ${{ inputs.go-version }}
         cache: false
 
     - name: Install addlicense
       shell: bash
-      run: go install github.com/google/addlicense@${{ inputs.addlicense-version }}
+      env:
+        ADDLICENSE_VERSION: ${{ inputs.addlicense-version }}
+      run: go install "github.com/google/addlicense@${ADDLICENSE_VERSION}"
 
     - name: Check license headers
       shell: bash
@@ -100,4 +102,8 @@ runs:
         # Run
         "${CMD[@]}"
 
-        echo "License headers check passed."
+        if [ "$INPUT_CHECK_ONLY" = "true" ]; then
+          echo "License headers check passed."
+        else
+          echo "Missing license headers added successfully."
+        fi

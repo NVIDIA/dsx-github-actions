@@ -37,13 +37,13 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
       with:
         node-version: ${{ inputs.node-version }}
 
     - name: Install commitlint
       shell: bash
-      run: npm install --no-package-lock --no-save @commitlint/cli @commitlint/config-conventional
+      run: npm install --no-package-lock --no-save --ignore-scripts @commitlint/cli @commitlint/config-conventional
 
     - name: Determine commit range
       id: range
@@ -56,9 +56,12 @@ runs:
         elif [ -n "$GITHUB_BASE_REF" ]; then
           # PR context: lint commits from base branch
           echo "from=origin/$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
-        else
+        elif git rev-parse HEAD~1 >/dev/null 2>&1; then
           # Push context: lint only the latest commit
           echo "from=HEAD~1" >> "$GITHUB_OUTPUT"
+        else
+          # Initial commit or shallow clone: skip range, lint HEAD only
+          echo "from=" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Run commitlint
@@ -73,6 +76,13 @@ runs:
           CONFIG_FLAG="--config $COMMITLINT_CONFIG"
         fi
 
-        echo "Linting commits from $COMMITLINT_FROM to $COMMITLINT_TO"
+        FROM_FLAG=""
+        if [ -n "$COMMITLINT_FROM" ]; then
+          FROM_FLAG="--from $COMMITLINT_FROM"
+          echo "Linting commits from $COMMITLINT_FROM to $COMMITLINT_TO"
+        else
+          echo "Linting commit $COMMITLINT_TO"
+        fi
+
         # shellcheck disable=SC2086
-        npx commitlint --from "$COMMITLINT_FROM" --to "$COMMITLINT_TO" $CONFIG_FLAG --verbose
+        npx commitlint $FROM_FLAG --to "$COMMITLINT_TO" $CONFIG_FLAG --verbose
