@@ -1,0 +1,184 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Reusable CI workflow for DSX Go projects.
+# Each job checks out the caller's repo + dsx-github-actions at the same
+# ref used by the caller, so pinning the workflow ref pins all actions.
+
+name: DSX Go CI
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        type: string
+        default: '1.25.5'
+      go-flags:
+        type: string
+        default: ''
+      runner:
+        type: string
+        default: 'linux-amd64-cpu4'
+      license-paths:
+        type: string
+        default: 'src/'
+      license-ignore:
+        type: string
+        default: 'vendor/**,tests/**'
+      docker-image:
+        type: string
+        default: ''
+      dockerfile:
+        type: string
+        default: 'Dockerfile'
+      helm-chart-path:
+        type: string
+        default: ''
+      codeql-enabled:
+        type: boolean
+        default: true
+      slack-channel-id:
+        type: string
+        default: ''
+      actions-ref:
+        description: 'Ref of dsx-github-actions to use (tag, branch, or SHA)'
+        type: string
+        default: 'main'
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    name: Commit Lint
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: NVIDIA/dsx-github-actions/.github/actions/commitlint@${{ inputs.actions-ref }}
+
+  license-headers:
+    name: License Headers
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NVIDIA/dsx-github-actions/.github/actions/license-headers@${{ inputs.actions-ref }}
+        with:
+          license: apache
+          copyright-holder: "NVIDIA CORPORATION & AFFILIATES. All rights reserved."
+          paths: ${{ inputs.license-paths }}
+          ignore: ${{ inputs.license-ignore }}
+          go-version: ${{ inputs.go-version }}
+
+  lint:
+    name: Go Lint
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NVIDIA/dsx-github-actions/.github/actions/go-lint@${{ inputs.actions-ref }}
+        with:
+          go-version: ${{ inputs.go-version }}
+          go-flags: ${{ inputs.go-flags }}
+
+  unit-test:
+    name: Unit Test
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NVIDIA/dsx-github-actions/.github/actions/go-test@${{ inputs.actions-ref }}
+        with:
+          go-version: ${{ inputs.go-version }}
+          go-flags: ${{ inputs.go-flags }}
+          test-flags: "-v -count=1 -timeout=10m"
+
+  docker-build:
+    name: Docker Build (Validation)
+    if: inputs.docker-image != ''
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NVIDIA/dsx-github-actions/.github/actions/docker-build@${{ inputs.actions-ref }}
+        with:
+          image: ${{ inputs.docker-image }}
+          tags: ci-validation
+          context: .
+          dockerfile: ${{ inputs.dockerfile }}
+          platforms: linux/amd64
+          push: "false"
+
+  codeql-scan:
+    name: CodeQL SAST
+    if: inputs.codeql-enabled
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+          cache: false
+      - uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@${{ inputs.actions-ref }}
+        with:
+          languages: go
+          upload-sarif: "false"
+
+  trufflehog-scan:
+    name: Secret Scan
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trufflehog-scan@${{ inputs.actions-ref }}
+        with:
+          post-pr-comment: "true"
+          fail-on-findings: "true"
+
+  helm-validate:
+    name: Helm Validate
+    if: inputs.helm-chart-path != ''
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NVIDIA/dsx-github-actions/.github/actions/helm-validate@${{ inputs.actions-ref }}
+        with:
+          chart-path: ${{ inputs.helm-chart-path }}
+          lint: "true"
+          template: "false"
+
+  slack-notify:
+    name: Slack Notification
+    if: inputs.slack-channel-id != '' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && always()
+    needs: [commitlint, license-headers, lint, unit-test, trufflehog-scan]
+    runs-on: ${{ inputs.runner }}
+    environment: notifications
+    env:
+      CI_STATUS: ${{ contains(needs.*.result, 'failure') && 'FAILED' || 'PASSED' }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      REPO_NAME: ${{ github.event.repository.name }}
+    steps:
+      - uses: NVIDIA/dsx-github-actions/.github/actions/slack-notify@${{ inputs.actions-ref }}
+        with:
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel-id: ${{ inputs.slack-channel-id }}
+          message: |
+            *${{ env.REPO_NAME }} CI* on `${{ github.ref_name }}` — *${{ env.CI_STATUS }}*
+            <${{ env.RUN_URL }}|View run>

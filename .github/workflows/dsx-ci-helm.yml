@@ -1,0 +1,118 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Reusable CI workflow for DSX Helm chart projects.
+
+name: DSX Helm CI
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        default: 'linux-amd64-cpu4'
+      chart-path:
+        type: string
+        required: true
+      license-paths:
+        type: string
+        default: '.'
+      license-ignore:
+        type: string
+        default: 'charts/**'
+      helm-template:
+        description: 'Run helm template (requires dependency resolution)'
+        type: boolean
+        default: false
+      slack-channel-id:
+        type: string
+        default: ''
+      actions-ref:
+        description: 'Ref of dsx-github-actions to use (tag, branch, or SHA)'
+        type: string
+        default: 'main'
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    name: Commit Lint
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: NVIDIA/dsx-github-actions/.github/actions/commitlint@${{ inputs.actions-ref }}
+
+  license-headers:
+    name: License Headers
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+      - uses: NVIDIA/dsx-github-actions/.github/actions/license-headers@${{ inputs.actions-ref }}
+        with:
+          license: apache
+          copyright-holder: "NVIDIA CORPORATION & AFFILIATES. All rights reserved."
+          paths: ${{ inputs.license-paths }}
+          ignore: ${{ inputs.license-ignore }}
+
+  helm-validate:
+    name: Helm Validate
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NVIDIA/dsx-github-actions/.github/actions/helm-validate@${{ inputs.actions-ref }}
+        with:
+          chart-path: ${{ inputs.chart-path }}
+          lint: "true"
+          template: ${{ inputs.helm-template && 'true' || 'false' }}
+
+  trufflehog-scan:
+    name: Secret Scan
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: NVIDIA/dsx-github-actions/.github/actions/trufflehog-scan@${{ inputs.actions-ref }}
+        with:
+          post-pr-comment: "true"
+          fail-on-findings: "true"
+
+  slack-notify:
+    name: Slack Notification
+    if: inputs.slack-channel-id != '' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && always()
+    needs: [commitlint, license-headers, helm-validate, trufflehog-scan]
+    runs-on: ${{ inputs.runner }}
+    environment: notifications
+    env:
+      CI_STATUS: ${{ contains(needs.*.result, 'failure') && 'FAILED' || 'PASSED' }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      REPO_NAME: ${{ github.event.repository.name }}
+    steps:
+      - uses: NVIDIA/dsx-github-actions/.github/actions/slack-notify@${{ inputs.actions-ref }}
+        with:
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel-id: ${{ inputs.slack-channel-id }}
+          message: |
+            *${{ env.REPO_NAME }} CI* on `${{ github.ref_name }}` — *${{ env.CI_STATUS }}*
+            <${{ env.RUN_URL }}|View run>
