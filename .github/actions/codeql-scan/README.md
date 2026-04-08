@@ -412,7 +412,7 @@ jobs:
   codeql-go:
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       - uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@main
         with:
           languages: "go"
@@ -558,7 +558,7 @@ jobs:
   build-and-scan:
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
 
       # CodeQL will trace this build
       - uses: NVIDIA/dsx-github-actions/.github/actions/codeql-scan@main

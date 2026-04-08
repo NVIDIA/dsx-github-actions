@@ -13,6 +13,10 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | [docker-build](.github/actions/docker-build/)           | Docker Buildx build/push wrapper  | Build/push multi-arch OCI images  |
 | [git-tag](.github/actions/git-tag/)                     | Create and push git tag           | Tagging releases                  |
 | [slack-notify](.github/actions/slack-notify/)           | Send notifications to Slack       | CI/CD status notifications        |
+| [go-lint](.github/actions/go-lint/)                     | Go linting (golangci-lint, fmt, vet) | Go code quality checks         |
+| [go-test](.github/actions/go-test/)                     | Go tests with coverage and JUnit  | Go test execution and reporting   |
+| [license-headers](.github/actions/license-headers/)     | SPDX license header checks        | License compliance                |
+| [commitlint](.github/actions/commitlint/)               | Conventional commit validation    | Commit message enforcement        |
 
 ## ♻️ Available Workflows
 
@@ -107,6 +111,10 @@ This reusable workflow wraps `skopeo copy`, so it copies the entire manifest lis
 - [Resource Push NGC Action](.github/actions/resource-push-ngc/README.md)
 - [Docker Build Action](.github/actions/docker-build/README.md)
 - [Slack Notify Action](.github/actions/slack-notify/README.md)
+- [Go Lint Action](.github/actions/go-lint/README.md)
+- [Go Test Action](.github/actions/go-test/README.md)
+- [License Headers Action](.github/actions/license-headers/README.md)
+- [Commitlint Action](.github/actions/commitlint/README.md)
 - [Workflows Guide](.github/workflows/README.md)
 
 ## 🎯 Features
@@ -309,7 +317,11 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
 │   ├── semantic-release/   # Automated versioning and releases
 │   ├── resource-push-ngc/  # NGC resources publishing
 │   ├── git-tag/            # Create and push git tag
-│   └── slack-notify/       # Send Slack notifications
+│   ├── slack-notify/       # Send Slack notifications
+│   ├── go-lint/            # Go linting (golangci-lint, fmt, vet)
+│   ├── go-test/            # Go tests with coverage and JUnit
+│   ├── license-headers/    # SPDX license header checks
+│   └── commitlint/         # Conventional commit validation
 └── workflows/
     ├── release.yml         # Automatic semantic versioning
     ├── promote-image.yml   # Promote image across registries

@@ -1,0 +1,88 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'Commit Lint'
+description: 'Validate commit messages against conventional commits using commitlint'
+
+inputs:
+  config-file:
+    description: 'Path to commitlint config file. If empty, uses default discovery (commitlint.config.js, .commitlintrc.js, etc.)'
+    required: false
+    default: ''
+  from:
+    description: 'Lint commits starting from this ref (exclusive). Defaults to the base of the PR or the parent of HEAD.'
+    required: false
+    default: ''
+  to:
+    description: 'Lint commits up to this ref (inclusive). Defaults to HEAD.'
+    required: false
+    default: 'HEAD'
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '20'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install commitlint
+      shell: bash
+      run: npm install --no-package-lock --no-save --ignore-scripts @commitlint/cli @commitlint/config-conventional
+
+    - name: Determine commit range
+      id: range
+      shell: bash
+      env:
+        INPUT_FROM: ${{ inputs.from }}
+      run: |
+        if [ -n "$INPUT_FROM" ]; then
+          echo "from=$INPUT_FROM" >> "$GITHUB_OUTPUT"
+        elif [ -n "$GITHUB_BASE_REF" ]; then
+          # PR context: lint commits from base branch
+          echo "from=origin/$GITHUB_BASE_REF" >> "$GITHUB_OUTPUT"
+        elif git rev-parse HEAD~1 >/dev/null 2>&1; then
+          # Push context: lint only the latest commit
+          echo "from=HEAD~1" >> "$GITHUB_OUTPUT"
+        else
+          # Initial commit or shallow clone: skip range, lint HEAD only
+          echo "from=" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run commitlint
+      shell: bash
+      env:
+        COMMITLINT_FROM: ${{ steps.range.outputs.from }}
+        COMMITLINT_TO: ${{ inputs.to }}
+        COMMITLINT_CONFIG: ${{ inputs.config-file }}
+      run: |
+        CONFIG_FLAG=""
+        if [ -n "$COMMITLINT_CONFIG" ]; then
+          CONFIG_FLAG="--config $COMMITLINT_CONFIG"
+        fi
+
+        FROM_FLAG=""
+        if [ -n "$COMMITLINT_FROM" ]; then
+          FROM_FLAG="--from $COMMITLINT_FROM"
+          echo "Linting commits from $COMMITLINT_FROM to $COMMITLINT_TO"
+        else
+          echo "Linting commit $COMMITLINT_TO"
+        fi
+
+        # shellcheck disable=SC2086
+        npx commitlint $FROM_FLAG --to "$COMMITLINT_TO" $CONFIG_FLAG --verbose

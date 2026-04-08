@@ -1,0 +1,160 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'Go Test'
+description: 'Run Go tests with race detection, coverage reporting, and JUnit output'
+
+inputs:
+  go-version:
+    description: 'Go version to use (e.g., 1.25.5). If empty, uses go.mod version.'
+    required: false
+    default: ''
+  go-version-file:
+    description: 'Path to go.mod for version detection. Used when go-version is empty.'
+    required: false
+    default: 'go.mod'
+  working-directory:
+    description: 'Working directory for running tests'
+    required: false
+    default: '.'
+  packages:
+    description: 'Go packages to test (e.g., ./... or ./src/...)'
+    required: false
+    default: './...'
+  race:
+    description: 'Enable race detector'
+    required: false
+    default: 'true'
+  coverage:
+    description: 'Enable coverage reporting'
+    required: false
+    default: 'true'
+  coverage-file:
+    description: 'Coverage output file name'
+    required: false
+    default: 'coverage.out'
+  junit:
+    description: 'Generate JUnit XML report via gotestsum'
+    required: false
+    default: 'true'
+  junit-file:
+    description: 'JUnit XML output file name'
+    required: false
+    default: 'junit-report.xml'
+  test-flags:
+    description: 'Additional flags passed to go test (e.g., -v -count=1 -timeout=10m)'
+    required: false
+    default: '-v -count=1'
+  go-flags:
+    description: 'GOFLAGS environment variable (e.g., -mod=vendor)'
+    required: false
+    default: ''
+  gotestsum-version:
+    description: 'gotestsum version to install for JUnit output'
+    required: false
+    default: 'c4a0df2e75a225d979a444342dd3db752b53619f' # v1.13.0
+  upload-artifacts:
+    description: 'Upload coverage and JUnit reports as workflow artifacts'
+    required: false
+    default: 'true'
+  artifact-name:
+    description: 'Name for uploaded artifact (override to avoid collisions in matrix builds)'
+    required: false
+    default: 'go-test-results'
+
+outputs:
+  coverage-file:
+    description: 'Path to coverage output file'
+    value: ${{ inputs.working-directory }}/${{ inputs.coverage-file }}
+  junit-file:
+    description: 'Path to JUnit XML report'
+    value: ${{ inputs.working-directory }}/${{ inputs.junit-file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version: ${{ inputs.go-version }}
+        go-version-file: ${{ inputs.go-version == '' && format('{0}/{1}', inputs.working-directory, inputs.go-version-file) || '' }}
+        cache: true
+        cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+    - name: Install gotestsum
+      if: inputs.junit == 'true'
+      shell: bash
+      env:
+        GOTESTSUM_VERSION: ${{ inputs.gotestsum-version }}
+      run: go install "gotest.tools/gotestsum@${GOTESTSUM_VERSION}"
+
+    - name: Run tests
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GOFLAGS: ${{ inputs.go-flags }}
+        INPUT_TEST_FLAGS: ${{ inputs.test-flags }}
+        INPUT_RACE: ${{ inputs.race }}
+        INPUT_COVERAGE: ${{ inputs.coverage }}
+        INPUT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+        INPUT_PACKAGES: ${{ inputs.packages }}
+        INPUT_JUNIT: ${{ inputs.junit }}
+        INPUT_JUNIT_FILE: ${{ inputs.junit-file }}
+      run: |
+        # Build test flags (env vars prevent shell injection from ${{ }} interpolation)
+        TEST_FLAGS="$INPUT_TEST_FLAGS"
+        if [ "$INPUT_RACE" = "true" ]; then
+          TEST_FLAGS="-race ${TEST_FLAGS}"
+        fi
+        if [ "$INPUT_COVERAGE" = "true" ]; then
+          TEST_FLAGS="-coverprofile=${INPUT_COVERAGE_FILE} -covermode=atomic ${TEST_FLAGS}"
+        fi
+
+        # shellcheck disable=SC2086
+        echo "::group::go test ${TEST_FLAGS} ${INPUT_PACKAGES}"
+        if [ "$INPUT_JUNIT" = "true" ]; then
+          # shellcheck disable=SC2086
+          gotestsum \
+            --junitfile "$INPUT_JUNIT_FILE" \
+            --format testdox \
+            -- ${TEST_FLAGS} ${INPUT_PACKAGES}
+        else
+          # shellcheck disable=SC2086
+          go test ${TEST_FLAGS} ${INPUT_PACKAGES}
+        fi
+        echo "::endgroup::"
+
+    - name: Display coverage summary
+      if: inputs.coverage == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_COVERAGE_FILE: ${{ inputs.coverage-file }}
+      run: |
+        if [ -f "$INPUT_COVERAGE_FILE" ]; then
+          echo "::group::Coverage Summary"
+          go tool cover -func="$INPUT_COVERAGE_FILE" | tail -1
+          echo "::endgroup::"
+        fi
+
+    - name: Upload test artifacts
+      if: inputs.upload-artifacts == 'true' && always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          ${{ inputs.working-directory }}/${{ inputs.coverage-file }}
+          ${{ inputs.working-directory }}/${{ inputs.junit-file }}
+        if-no-files-found: ignore
+        retention-days: 7
