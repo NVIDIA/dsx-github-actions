@@ -82,6 +82,9 @@ runs:
         HELM_CHART_APP_VERSION: ${{ inputs.app-version }}
         CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
       run: |
+        CC_HELM_PACKAGE_DIR="${GITHUB_ACTION}-package"
+        echo "CC_HELM_PACKAGE_DIR=${CC_HELM_PACKAGE_DIR}" >> "$GITHUB_ENV"
+        export CC_HELM_PACKAGE_DIR
         UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
         "$UTILS_PATH" helm_init_package
 
@@ -97,7 +100,6 @@ runs:
       shell: bash
       env:
         CC_HELM_CHART_PATH: ${{ inputs.chart-path }}
-        CC_HELM_PACKAGE_DIR: "package"
         CC_HELM_LINT: ${{ inputs.lint }}
       run: |
         UTILS_PATH="${{ github.action_path }}/../helm-shared/scripts/utils.sh"
@@ -109,7 +111,6 @@ runs:
       shell: bash
       if: inputs.ngc-push == 'true'
       env:
-        CC_HELM_PACKAGE_DIR: "package"
         CC_HELM_NGC_KEY: ${{ inputs.ngc-key }}
         CC_HELM_NGC_PATH: ${{ inputs.ngc-path }}
         CC_HELM_NGC_REGISTRY: ${{ inputs.ngc-registry }}
@@ -137,11 +138,24 @@ runs:
       id: set_outputs
       shell: bash
       run: |
-        # These variables should be available from Init Package/Push steps
         echo "chart-name=${CC_HELM_CHART_NAME:-}" >> "$GITHUB_OUTPUT"
         echo "chart-version=${CC_HELM_CHART_VERSION:-}" >> "$GITHUB_OUTPUT"
+
+        if [[ -n "${CC_HELM_CHART_LIST:-}" && "${CC_HELM_CHART_LIST}" != "[]" ]]; then
+          echo "chart-names=$(echo "$CC_HELM_CHART_LIST" | jq -c '[.[].name]')" >> "$GITHUB_OUTPUT"
+          echo "chart-versions=$(echo "$CC_HELM_CHART_LIST" | jq -c '[.[].version]')" >> "$GITHUB_OUTPUT"
+        fi
+
+        echo "push-results=${CC_HELM_NGC_PUSH_RESULTS:-[]}" >> "$GITHUB_OUTPUT"
+
         if [[ "${CC_HELM_NGC_PUSH_STATUS:-}" == "skipped" ]]; then
           echo "push-skipped=true" >> "$GITHUB_OUTPUT"
         else
           echo "push-skipped=false" >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Cleanup Package Directory
+      shell: bash
+      if: always()
+      run: |
+        [[ -n "${CC_HELM_PACKAGE_DIR:-}" ]] && rm -rf "${CC_HELM_PACKAGE_DIR}"
