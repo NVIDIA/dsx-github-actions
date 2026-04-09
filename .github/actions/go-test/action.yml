@@ -112,7 +112,7 @@ runs:
         INPUT_JUNIT: ${{ inputs.junit }}
         INPUT_JUNIT_FILE: ${{ inputs.junit-file }}
       run: |
-        # Build test flags (env vars prevent shell injection from ${{ }} interpolation)
+        # Build test flags (env vars prevent shell injection from expression interpolation)
         TEST_FLAGS="$INPUT_TEST_FLAGS"
         if [ "$INPUT_RACE" = "true" ]; then
           TEST_FLAGS="-race ${TEST_FLAGS}"
