@@ -141,13 +141,6 @@ runs:
         echo "chart-name=${CC_HELM_CHART_NAME:-}" >> "$GITHUB_OUTPUT"
         echo "chart-version=${CC_HELM_CHART_VERSION:-}" >> "$GITHUB_OUTPUT"
 
-        if [[ -n "${CC_HELM_CHART_LIST:-}" && "${CC_HELM_CHART_LIST}" != "[]" ]]; then
-          echo "chart-names=$(echo "$CC_HELM_CHART_LIST" | jq -c '[.[].name]')" >> "$GITHUB_OUTPUT"
-          echo "chart-versions=$(echo "$CC_HELM_CHART_LIST" | jq -c '[.[].version]')" >> "$GITHUB_OUTPUT"
-        fi
-
-        echo "push-results=${CC_HELM_NGC_PUSH_RESULTS:-[]}" >> "$GITHUB_OUTPUT"
-
         if [[ "${CC_HELM_NGC_PUSH_STATUS:-}" == "skipped" ]]; then
           echo "push-skipped=true" >> "$GITHUB_OUTPUT"
         else
