@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a Question
+    url: https://github.com/NVIDIA/dsx-github-actions/discussions
+    about: Please ask any questions here.
