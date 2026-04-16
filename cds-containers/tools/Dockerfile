@@ -90,7 +90,7 @@ RUN curl -fsSL -o regctl "https://github.com/regclient/regclient/releases/downlo
 
 # helm
 ENV VERIFY_CHECKSUM=true \
-    VERIFY_SIGNATURES=true
+    VERIFY_SIGNATURES=false
 RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash \
     && helm version
 
