@@ -67,7 +67,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/pull-request/')
+        if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -80,13 +80,13 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PREFIX }}${{ matrix.image.name }}
           tags: |
-            # Version from VERSION.md: 0.0.1 (main only)
-            type=raw,value=${{ needs.get-version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
-            # Major.minor: 0.0.1 → 0.0-latest (main only)
-            type=raw,value=${{ needs.get-version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }},suffix=-latest
-            # Latest tag (main only)
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            # Commit SHA: dev-abc1234 (all branches)
+            # Version from VERSION.md: 0.0.1
+            type=raw,value=${{ needs.get-version.outputs.version }}
+            # Major.minor: 0.0.1 → 0.0
+            type=raw,value=${{ needs.get-version.outputs.version }},enable=true,suffix=-latest
+            # Latest tag
+            type=raw,value=latest
+            # Commit SHA: dev-abc1234 (for testing specific builds)
             type=sha,prefix=dev-
             # Branch name (for PR/branch builds)
             type=ref,event=branch
@@ -101,8 +101,8 @@ jobs:
         with:
           context: ./cds-containers
           file: ${{ matrix.image.path }}/Dockerfile
-          # Push on main (version + latest) and pull-request/** (dev tags only)
-          push: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/pull-request/') }}
+          # Only push on main to avoid publishing images from PR mirror branches
+          push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
