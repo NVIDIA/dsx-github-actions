@@ -56,28 +56,23 @@ runs:
     - name: Prepare Slack Payload
       id: prepare-payload
       shell: bash
+      env:
+        INPUT_CHANNEL_ID: ${{ inputs.channel-id }}
+        INPUT_PAYLOAD: ${{ inputs.payload }}
+        INPUT_MESSAGE: ${{ inputs.message }}
       run: |
-        CHANNEL_ID="${{ inputs.channel-id }}"
-
         # If custom payload is provided, merge channel into it
-        if [ -n '${{ inputs.payload }}' ]; then
+        if [ -n "${INPUT_PAYLOAD}" ]; then
           # Parse the JSON and add/update channel field
-          PAYLOAD=$(cat <<'PAYLOAD_EOF' | jq -c ". + {channel: \"$CHANNEL_ID\"}"
-        ${{ inputs.payload }}
-        PAYLOAD_EOF
-        )
+          PAYLOAD=$(echo "${INPUT_PAYLOAD}" | jq -c ". + {channel: \"${INPUT_CHANNEL_ID}\"}")
           echo "payload<<EOF" >> $GITHUB_OUTPUT
           echo "$PAYLOAD" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-        elif [ -n '${{ inputs.message }}' ]; then
+        elif [ -n "${INPUT_MESSAGE}" ]; then
           # Simple message mode - construct basic payload
-          MESSAGE=$(cat <<'MESSAGE_EOF'
-        ${{ inputs.message }}
-        MESSAGE_EOF
-        )
           PAYLOAD=$(jq -n \
-            --arg channel "$CHANNEL_ID" \
-            --arg text "$MESSAGE" \
+            --arg channel "${INPUT_CHANNEL_ID}" \
+            --arg text "${INPUT_MESSAGE}" \
             '{channel: $channel, text: $text}')
           echo "payload<<EOF" >> $GITHUB_OUTPUT
           echo "$PAYLOAD" >> $GITHUB_OUTPUT
@@ -100,23 +95,28 @@ runs:
     - name: Display Notification Info
       if: steps.slack.outcome == 'success'
       shell: bash
+      env:
+        SLACK_TS: ${{ steps.slack.outputs.ts }}
+        SLACK_THREAD_TS: ${{ steps.slack.outputs.thread_ts }}
+        INPUT_CHANNEL_ID: ${{ inputs.channel-id }}
+        INPUT_ERRORS: ${{ inputs.errors }}
       run: |
-        if [ -n "${{ steps.slack.outputs.ts }}" ]; then
+        if [ -n "${SLACK_TS}" ]; then
           echo "✅ Slack notification sent successfully!"
-          echo "📬 Channel ID: ${{ inputs.channel-id }}"
-          echo "⏰ Timestamp: ${{ steps.slack.outputs.ts }}"
-          if [ -n "${{ steps.slack.outputs.thread_ts }}" ]; then
-            echo "🧵 Thread Timestamp: ${{ steps.slack.outputs.thread_ts }}"
+          echo "📬 Channel ID: ${INPUT_CHANNEL_ID}"
+          echo "⏰ Timestamp: ${SLACK_TS}"
+          if [ -n "${SLACK_THREAD_TS}" ]; then
+            echo "🧵 Thread Timestamp: ${SLACK_THREAD_TS}"
           fi
         else
           echo "⚠️ Slack API call completed but returned no timestamp!"
           echo "This usually means the bot doesn't have permission to post to the channel."
           echo ""
           echo "Common solutions:"
-          echo "  1. Invite the bot to channel ${{ inputs.channel-id }}: /invite @YourBotName"
+          echo "  1. Invite the bot to channel ${INPUT_CHANNEL_ID}: /invite @YourBotName"
           echo "  2. Add 'chat:write.public' scope to your bot (for public channels)"
-          echo "  3. Verify the channel ID is correct: ${{ inputs.channel-id }}"
-          if [ "${{ inputs.errors }}" == "true" ]; then
+          echo "  3. Verify the channel ID is correct: ${INPUT_CHANNEL_ID}"
+          if [ "${INPUT_ERRORS}" == "true" ]; then
             exit 1
           fi
         fi
@@ -124,8 +124,10 @@ runs:
     - name: Display Error Info
       if: steps.slack.outcome == 'failure'
       shell: bash
+      env:
+        INPUT_ERRORS: ${{ inputs.errors }}
       run: |
         echo "❌ Slack notification failed!"
-        if [ "${{ inputs.errors }}" == "false" ]; then
+        if [ "${INPUT_ERRORS}" == "false" ]; then
           echo "⚠️ Continuing workflow despite failure (errors: false)"
         fi

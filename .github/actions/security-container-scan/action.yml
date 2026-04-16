@@ -70,10 +70,11 @@ runs:
     - name: Precheck local image exists
       id: precheck
       shell: bash
+      env:
+        INPUT_IMAGE: ${{ inputs.image }}
       run: |
         set +e
-        IMAGE="${{ inputs.image }}"
-        docker image inspect "${IMAGE}" >/dev/null 2>&1
+        docker image inspect "${INPUT_IMAGE}" >/dev/null 2>&1
         rc=$?
         if [ $rc -eq 0 ]; then
           echo "image_exists=true" >> "$GITHUB_OUTPUT"
@@ -96,13 +97,14 @@ runs:
       id: grype
       if: ${{ steps.precheck.outputs.image_exists == 'true' }}
       shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        REPORT_JSON: ${{ inputs.report-json }}
+        REPORT_SARIF: ${{ inputs.report-sarif }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        GRYPE_IMAGE: ${{ inputs.grype-image }}
       run: |
         set +e
-        IMAGE="${{ inputs.image }}"
-        REPORT_JSON="${{ inputs.report-json }}"
-        REPORT_SARIF="${{ inputs.report-sarif }}"
-        FAIL_ON="${{ inputs.fail-on }}"
-        GRYPE_IMAGE="${{ inputs.grype-image }}"
 
         echo "Pulling Grype scanner image..."
         docker pull "${GRYPE_IMAGE}" >/dev/null 2>&1
@@ -147,28 +149,37 @@ runs:
     - name: Write scan summary
       if: ${{ inputs.write-summary == 'true' }}
       shell: bash
+      env:
+        INPUT_IMAGE: ${{ inputs.image }}
+        INPUT_ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        INPUT_REPORT_JSON: ${{ inputs.report-json }}
       run: |
         set -euo pipefail
         echo "### 🔍 Container Scan (SBOM + Grype)" >> "$GITHUB_STEP_SUMMARY"
         echo "" >> "$GITHUB_STEP_SUMMARY"
-        echo "- Image: \`${{ inputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
-        echo "- Reports artifact: \`${{ inputs.artifact-name }}\` (sarif + json)" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Image: \`${INPUT_IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Reports artifact: \`${INPUT_ARTIFACT_NAME}\` (sarif + json)" >> "$GITHUB_STEP_SUMMARY"
 
-        if [ -f "${{ inputs.report-json }}" ]; then
-        python3 "$GITHUB_ACTION_PATH/grype_summary.py" --json "${{ inputs.report-json }}" --max-top 10 >> "$GITHUB_STEP_SUMMARY" || true
+        if [ -f "${INPUT_REPORT_JSON}" ]; then
+        python3 "$GITHUB_ACTION_PATH/grype_summary.py" --json "${INPUT_REPORT_JSON}" --max-top 10 >> "$GITHUB_STEP_SUMMARY" || true
         fi
 
     - name: Finalize status/outputs
       id: final
       if: always()
       shell: bash
+      env:
+        IMAGE_EXISTS: ${{ steps.precheck.outputs.image_exists }}
+        SBOM_OUTCOME: ${{ steps.sbom.outcome }}
+        GRYPE_STATUS: ${{ steps.grype.outputs.status }}
+        GRYPE_EXIT: ${{ steps.grype.outputs.exit_code }}
+        INPUT_GENERATE_SBOM: ${{ inputs.generate-sbom }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_REPORT_JSON: ${{ inputs.report-json }}
+        INPUT_REPORT_SARIF: ${{ inputs.report-sarif }}
+        INPUT_FAIL_BUILD: ${{ inputs.fail-build }}
       run: |
         set -euo pipefail
-
-        IMAGE_EXISTS="${{ steps.precheck.outputs.image_exists }}"
-        SBOM_OUTCOME="${{ steps.sbom.outcome }}"
-        GRYPE_STATUS="${{ steps.grype.outputs.status }}"
-        GRYPE_EXIT="${{ steps.grype.outputs.exit_code }}"
 
         status="ok"
         detail="ok"
@@ -176,7 +187,7 @@ runs:
         if [ "${IMAGE_EXISTS}" != "true" ]; then
           status="image_not_found"
           detail="local docker image not found"
-        elif [ "${{ inputs.generate-sbom }}" = "true" ] && [ "${SBOM_OUTCOME}" != "success" ]; then
+        elif [ "${INPUT_GENERATE_SBOM}" = "true" ] && [ "${SBOM_OUTCOME}" != "success" ]; then
           status="sbom_failed"
           detail="sbom-action failed"
         elif [ -z "${GRYPE_STATUS}" ]; then
@@ -184,10 +195,10 @@ runs:
           detail="grype step did not produce status"
         elif [ "${GRYPE_STATUS}" = "ok" ]; then
           status="ok"
-          detail="no vulnerabilities at/above fail-on=${{ inputs.fail-on }}"
+          detail="no vulnerabilities at/above fail-on=${INPUT_FAIL_ON}"
         elif [ "${GRYPE_STATUS}" = "high_or_error" ]; then
           status="high_or_error"
-          detail="grype exit_code=${GRYPE_EXIT} (fail-on=${{ inputs.fail-on }})"
+          detail="grype exit_code=${GRYPE_EXIT} (fail-on=${INPUT_FAIL_ON})"
         else
           status="${GRYPE_STATUS}"
           detail="grype exit_code=${GRYPE_EXIT}"
@@ -195,10 +206,10 @@ runs:
 
         echo "status=${status}" >> "$GITHUB_OUTPUT"
         echo "detail=${detail}" >> "$GITHUB_OUTPUT"
-        echo "report_json=${{ inputs.report-json }}" >> "$GITHUB_OUTPUT"
-        echo "report_sarif=${{ inputs.report-sarif }}" >> "$GITHUB_OUTPUT"
+        echo "report_json=${INPUT_REPORT_JSON}" >> "$GITHUB_OUTPUT"
+        echo "report_sarif=${INPUT_REPORT_SARIF}" >> "$GITHUB_OUTPUT"
 
-        if [ "${{ inputs.fail-build }}" = "true" ] && [ "${status}" != "ok" ]; then
+        if [ "${INPUT_FAIL_BUILD}" = "true" ] && [ "${status}" != "ok" ]; then
           echo "Failing build due to status=${status}: ${detail}" 1>&2
           exit 1
         fi
