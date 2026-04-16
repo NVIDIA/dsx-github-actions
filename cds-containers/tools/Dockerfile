@@ -103,7 +103,7 @@ RUN curl -fsSL -o terraform.zip "https://releases.hashicorp.com/terraform/${TERR
     && terraform --version
 
 # terragrunt
-ARG TERRAGRUNT_VERSION="0.99.5"
+ARG TERRAGRUNT_VERSION="1.0.1"
 RUN curl -fsSL -o terragrunt "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64" \
     && mv ./terragrunt /usr/local/bin/terragrunt \
     && chmod +x /usr/local/bin/terragrunt \
