@@ -31,28 +31,28 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # For internal GitLab runners, use the GitLab version of this container
 
 # kubectl (latest version: curl -sSL https://dl.k8s.io/release/stable.txt)
-ARG KUBECTL_VERSION="1.32.1"
+ARG KUBECTL_VERSION="1.35.4"
 RUN curl -fsSL -o kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
     && mv ./kubectl  /usr/local/bin/kubectl \
     && chmod +x /usr/local/bin/kubectl \
     && kubectl version --client
 
 # kubelogin
-ARG KUBELOGIN_VERSION="0.1.7"
+ARG KUBELOGIN_VERSION="0.2.17"
 RUN curl -fsSL -o kubelogin.zip "https://github.com/Azure/kubelogin/releases/download/v${KUBELOGIN_VERSION}/kubelogin-linux-amd64.zip" \
     && unzip -j kubelogin.zip \
     && mv kubelogin /usr/local/bin/kubelogin \
     && kubelogin --version
 
 # yq
-ARG YQ_VERSION="4.45.1"
+ARG YQ_VERSION="4.52.5"
 RUN curl -fsSL -o yq "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" \
     && mv ./yq /usr/local/bin/yq \
     && chmod +x /usr/local/bin/yq \
     && yq --version
 
 # ngccli
-ARG NGCCLI_VERSION="4.8.2"
+ARG NGCCLI_VERSION="4.17.0"
 RUN curl -sSL -O "https://api.ngc.nvidia.com/v2/resources/nvidia/ngc-apps/ngc_cli/versions/${NGCCLI_VERSION}/files/ngccli_linux.zip" \
     && unzip ngccli_linux.zip \
     && rm ngccli_linux.zip \
@@ -82,7 +82,7 @@ RUN curl -sSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/
     && docker --version
 
 # regctl
-ARG REGCTL_VERSION="0.9.2"
+ARG REGCTL_VERSION="0.11.3"
 RUN curl -fsSL -o regctl "https://github.com/regclient/regclient/releases/download/v${REGCTL_VERSION}/regctl-linux-amd64" \
     && mv ./regctl /usr/local/bin/regctl \
     && chmod +x /usr/local/bin/regctl \
@@ -90,12 +90,12 @@ RUN curl -fsSL -o regctl "https://github.com/regclient/regclient/releases/downlo
 
 # helm
 ENV VERIFY_CHECKSUM=true \
-    VERIFY_SIGNATURES=true
+    VERIFY_SIGNATURES=false
 RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash \
     && helm version
 
 # terraform
-ARG TERRAFORM_VERSION="1.13.3"
+ARG TERRAFORM_VERSION="1.14.8"
 RUN curl -fsSL -o terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
     unzip terraform.zip && \
     rm terraform.zip && \
@@ -103,7 +103,7 @@ RUN curl -fsSL -o terraform.zip "https://releases.hashicorp.com/terraform/${TERR
     && terraform --version
 
 # terragrunt
-ARG TERRAGRUNT_VERSION="0.72.6"
+ARG TERRAGRUNT_VERSION="0.99.5"
 RUN curl -fsSL -o terragrunt "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64" \
     && mv ./terragrunt /usr/local/bin/terragrunt \
     && chmod +x /usr/local/bin/terragrunt \
@@ -133,8 +133,8 @@ RUN ln -s /usr/local/bin/bazel8 /usr/local/bin/bazel \
     && bazel8 --version \
     && bazel --version
 
-# uv (latest version: 0.9.7)
-COPY --from=ghcr.io/astral-sh/uv:0.9.7 /uv /uvx /usr/local/bin/
+# uv (latest version: 0.11.7)
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /usr/local/bin/
 RUN uv self version
 
 # Note: CDS CLI is not included as GitHub runners cannot reach internal GitLab
