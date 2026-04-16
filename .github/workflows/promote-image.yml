@@ -62,18 +62,24 @@ jobs:
       - name: Prepare refs
         id: refs
         shell: bash
+        env:
+          INPUT_DIGEST: ${{ inputs.digest }}
+          INPUT_SOURCE: ${{ inputs.source }}
+          INPUT_SOURCE_TAG: ${{ inputs.source_tag }}
+          INPUT_DESTINATION: ${{ inputs.destination }}
+          INPUT_DESTINATION_TAG: ${{ inputs.destination_tag }}
         run: |
           set -euo pipefail
 
           # Assemble source reference
-          if [[ -n "${{ inputs.digest }}" ]]; then
-            source_ref="${{ inputs.source }}@${{ inputs.digest }}"
+          if [[ -n "${INPUT_DIGEST}" ]]; then
+            source_ref="${INPUT_SOURCE}@${INPUT_DIGEST}"
           else
-            source_ref="${{ inputs.source }}:${{ inputs.source_tag }}"
+            source_ref="${INPUT_SOURCE}:${INPUT_SOURCE_TAG}"
           fi
 
           # Assemble destination reference
-          destination_ref="${{ inputs.destination }}:${{ inputs.destination_tag }}"
+          destination_ref="${INPUT_DESTINATION}:${INPUT_DESTINATION_TAG}"
 
           echo "source_ref=${source_ref}" >> "$GITHUB_OUTPUT"
           echo "destination_ref=${destination_ref}" >> "$GITHUB_OUTPUT"

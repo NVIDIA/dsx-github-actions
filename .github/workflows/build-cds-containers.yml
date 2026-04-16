@@ -16,14 +16,12 @@ env:
   IMAGE_NAMESPACE: nvidia
   IMAGE_PREFIX: dsx-cds-  # Prefix to identify CDS container images
 
-permissions:
-  contents: read
-  packages: write  # Required to push to GHCR
-
 jobs:
   # Job 1: Read version from VERSION.md
   get-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.extract-version.outputs.version }}
 
@@ -41,6 +39,9 @@ jobs:
   # Job 2: Build and push all container images
   build-and-push-images:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # Required to push to GHCR
     needs: get-version
     strategy:
       fail-fast: false
@@ -122,6 +123,9 @@ jobs:
   # Job 3: Test using the built go-dev image
   test-go-dev-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     needs: [get-version, build-and-push-images]
     # Only run tests when images are pushed (main only)
     if: github.ref == 'refs/heads/main'
@@ -161,6 +165,9 @@ jobs:
   # Job 4: Test using tools container
   test-tools-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     needs: [get-version, build-and-push-images]
     # Only run tests when images are pushed (main only)
     if: github.ref == 'refs/heads/main'
@@ -196,6 +203,8 @@ jobs:
   # Job 5: Summary
   summary:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [get-version, build-and-push-images, test-go-dev-image, test-tools-image]
     if: always()
 
