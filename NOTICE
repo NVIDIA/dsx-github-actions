@@ -1,0 +1,30 @@
+dsx-github-actions
+Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Scope of this NOTICE
+--------------------
+This notice applies to the source code distributed in this repository
+(https://github.com/NVIDIA/dsx-github-actions), not to any container
+images or other artifacts that may be built or published from it.
+
+Third-party software in the repository source
+---------------------------------------------
+The source code in this repository does not bundle or redistribute any
+third-party open source software:
+
+- GitHub Actions referenced via the `uses:` syntax in workflow YAML are
+  not vendored; each referenced action remains under its own license.
+- Binaries installed or downloaded at build/runtime by the workflows and
+  Dockerfiles under `cds-containers/` (including but not limited to
+  kubectl, helm, terraform, terragrunt, ngc-cli, regctl, yq, uv, bazel,
+  syft, grype, golangci-lint, node, docker, git) are obtained from their
+  upstream distributions and are not redistributed as source in this
+  repository. Each such tool retains its own license as published by its
+  respective author.
+
+Container images built from the `cds-containers/` Dockerfiles and
+published to ghcr.io are separate distributions; the third-party
+components installed into those images retain their own upstream
+licenses and are covered by the terms of those upstream licenses.
