@@ -8,6 +8,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 | ------------------------------------------------------- | --------------------------------- | --------------------------------- |
 | [codeql-scan](.github/actions/codeql-scan/)             | Static code analysis with CodeQL  | Security vulnerability detection  |
 | [trufflehog-scan](.github/actions/trufflehog-scan/)     | Secret scanning with TruffleHog   | Leaked credentials detection      |
+| [security-container-scan](.github/actions/security-container-scan/) | Container vuln scan (SBOM + Grype) | Container image CVE detection     |
 | [semantic-release](.github/actions/semantic-release/)   | Automated versioning and releases | Semantic versioning and changelog |
 | [resource-push-ngc](.github/actions/resource-push-ngc/) | Push resources to NGC             | Artifact publishing               |
 | [docker-build](.github/actions/docker-build/)           | Docker Buildx build/push wrapper  | Build/push multi-arch OCI images  |
@@ -27,7 +28,7 @@ A collection of reusable GitHub Actions for standardizing CI/CD workflows across
 
 ## ⚠️ Important: GitHub Advanced Security Required
 
-The security scanning action (`codeql-scan`) uploads results to GitHub's Code Scanning feature, which **requires GitHub Advanced Security (GHAS)** to be enabled:
+The security scanning actions (`codeql-scan`, `security-container-scan` with `upload-sarif: true`) upload results to GitHub's Code Scanning feature, which **requires GitHub Advanced Security (GHAS)** to be enabled:
 
 - ✅ **Public repositories**: Free and automatically available
 - ⚠️ **Private repositories**: Requires GHAS license
@@ -35,9 +36,10 @@ The security scanning action (`codeql-scan`) uploads results to GitHub's Code Sc
 Without GHAS enabled, scans will run successfully but uploads will fail. See individual action documentation for workarounds and details:
 
 - [CodeQL Prerequisites](.github/actions/codeql-scan/README.md#️-prerequisites)
+- [Security Container Scan Prerequisites](.github/actions/security-container-scan/README.md#prerequisites)
 
 > **Note**: `trivy-scan` has been removed due to a supply chain compromise (March 2026).
-> See: https://github.com/aquasecurity/trivy/discussions/10425
+> See: https://github.com/aquasecurity/trivy/discussions/10425 — use `security-container-scan` (Anchore Grype) as the replacement.
 
 ## 📖 Quick Start
 
@@ -107,6 +109,7 @@ This reusable workflow wraps `skopeo copy`, so it copies the entire manifest lis
 
 - [CodeQL Scan Action](.github/actions/codeql-scan/README.md)
 - [TruffleHog Secret Scan Action](.github/actions/trufflehog-scan/README.md)
+- [Security Container Scan Action](.github/actions/security-container-scan/README.md)
 - [Semantic Release Action](.github/actions/semantic-release/README.md)
 - [Resource Push NGC Action](.github/actions/resource-push-ngc/README.md)
 - [Docker Build Action](.github/actions/docker-build/README.md)
@@ -311,17 +314,18 @@ If CI still fails, execute `pre-commit run actionlint --all-files` or `pre-commi
 ```text
 .github/
 ├── actions/
-│   ├── codeql-scan/        # Static code analysis (CodeQL)
-│   ├── trufflehog-scan/    # Secret scanning (TruffleHog)
-│   ├── docker-build/       # Docker build/push wrapper
-│   ├── semantic-release/   # Automated versioning and releases
-│   ├── resource-push-ngc/  # NGC resources publishing
-│   ├── git-tag/            # Create and push git tag
-│   ├── slack-notify/       # Send Slack notifications
-│   ├── go-lint/            # Go linting (golangci-lint, fmt, vet)
-│   ├── go-test/            # Go tests with coverage and JUnit
-│   ├── license-headers/    # SPDX license header checks
-│   └── commitlint/         # Conventional commit validation
+│   ├── codeql-scan/              # Static code analysis (CodeQL)
+│   ├── trufflehog-scan/          # Secret scanning (TruffleHog)
+│   ├── security-container-scan/  # Container vuln scan (SBOM + Grype)
+│   ├── docker-build/             # Docker build/push wrapper
+│   ├── semantic-release/         # Automated versioning and releases
+│   ├── resource-push-ngc/        # NGC resources publishing
+│   ├── git-tag/                  # Create and push git tag
+│   ├── slack-notify/             # Send Slack notifications
+│   ├── go-lint/                  # Go linting (golangci-lint, fmt, vet)
+│   ├── go-test/                  # Go tests with coverage and JUnit
+│   ├── license-headers/          # SPDX license header checks
+│   └── commitlint/               # Conventional commit validation
 └── workflows/
     ├── release.yml         # Automatic semantic versioning
     ├── promote-image.yml   # Promote image across registries
