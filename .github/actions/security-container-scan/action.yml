@@ -64,6 +64,14 @@ inputs:
     description: 'Write a human-friendly summary into $GITHUB_STEP_SUMMARY'
     required: false
     default: 'true'
+  upload-sarif:
+    description: 'Upload the SARIF report to GitHub code scanning (Security tab). Requires `security-events: write` permission on the caller job and, for private repositories, GitHub Advanced Security. Upload failures are non-fatal.'
+    required: false
+    default: 'false'
+  sarif-category:
+    description: 'Category for the SARIF upload. Use a unique value per image when multiple images are scanned in the same run so entries do not overwrite each other in the Security tab. When empty, defaults to `grype-<sanitized-image-ref>`.'
+    required: false
+    default: ''
 
 outputs:
   status:
@@ -152,6 +160,32 @@ runs:
         fi
         exit 0
 
+    - name: Compute SARIF category
+      id: sarif-cat
+      if: ${{ inputs.upload-sarif == 'true' && steps.precheck.outputs.image_exists == 'true' }}
+      shell: bash
+      env:
+        INPUT_CATEGORY: ${{ inputs.sarif-category }}
+        INPUT_IMAGE: ${{ inputs.image }}
+      run: |
+        set -euo pipefail
+        if [ -n "${INPUT_CATEGORY}" ]; then
+          category="${INPUT_CATEGORY}"
+        else
+          # Sanitize image ref for use as a code-scanning category (keep alnum, dot, underscore, dash)
+          sanitized=$(echo "${INPUT_IMAGE}" | tr -c 'A-Za-z0-9._-' '-' | tr -s '-' | sed 's/^-//;s/-$//')
+          category="grype-${sanitized}"
+        fi
+        echo "category=${category}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF to GitHub code scanning
+      if: ${{ inputs.upload-sarif == 'true' && steps.precheck.outputs.image_exists == 'true' }}
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@fdbfb4d2750291e159f0156def62b853c2798ca2 # v4.31.5, use sha to align security guidelines
+      with:
+        sarif_file: ${{ inputs.report-sarif }}
+        category: ${{ steps.sarif-cat.outputs.category }}
+
     - name: Upload Grype reports
       if: ${{ inputs.upload-artifact == 'true' && steps.precheck.outputs.image_exists == 'true' }}
       uses: actions/upload-artifact@v4
@@ -176,7 +210,10 @@ runs:
         echo "- Reports artifact: \`${INPUT_ARTIFACT_NAME}\` (sarif + json)" >> "$GITHUB_STEP_SUMMARY"
 
         if [ -f "${INPUT_REPORT_JSON}" ]; then
-        python3 "$GITHUB_ACTION_PATH/grype_summary.py" --json "${INPUT_REPORT_JSON}" --max-top 10 >> "$GITHUB_STEP_SUMMARY" || true
+        # --max-top 0 suppresses the top CVE table; run summaries can be public
+        # on open-source repos, and listing specific vulns + package versions
+        # is a roadmap for attackers. Per-CVE detail stays in the artifact.
+        python3 "$GITHUB_ACTION_PATH/grype_summary.py" --json "${INPUT_REPORT_JSON}" --max-top 0 >> "$GITHUB_STEP_SUMMARY" || true
         fi
 
     - name: Finalize status/outputs
