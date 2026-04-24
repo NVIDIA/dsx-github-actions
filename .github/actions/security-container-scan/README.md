@@ -114,6 +114,7 @@ steps:
 | `grype-image`        | Grype container image to use for scanning. Override to pin to a specific digest for supply-chain hardening.                   | No       | `anchore/grype:latest`       |
 | `report-json`        | Filename for the JSON report.                                                                                                 | No       | `grype-results.json`         |
 | `report-sarif`       | Filename for the SARIF report.                                                                                                | No       | `grype-results.sarif`        |
+| `report-table`       | Filename for the human-readable table report (always generated).                                                              | No       | `grype-results.txt`          |
 | `upload-artifact`    | Upload reports as a workflow artifact.                                                                                        | No       | `true`                       |
 | `artifact-name`      | Artifact name for uploaded reports.                                                                                           | No       | `grype-container-scan`       |
 | `generate-sbom`      | Generate and upload an SBOM via `anchore/sbom-action`.                                                                        | No       | `true`                       |
@@ -131,10 +132,12 @@ steps:
 | `detail`       | Free-form detail string corresponding to `status`.                                                          |
 | `report_json`  | Path to the JSON report (if generated).                                                                     |
 | `report_sarif` | Path to the SARIF report (if generated).                                                                    |
+| `report_table` | Path to the table report (always generated).                                                                |
 
 ## Notes
 
-- **Step summary is count-only**: the `$GITHUB_STEP_SUMMARY` output shows total matches and Critical/High/Medium/Low counts, but does **not** list individual CVE IDs or affected packages. On public repositories, run summaries are world-readable, and publishing a list of unresolved CVEs + package versions amounts to handing attackers a roadmap. Per-CVE detail is available in the JSON/SARIF artifact (collaborators only) or, when `upload-sarif: true`, in the Security tab.
+- **Step summary is count-only**: the `$GITHUB_STEP_SUMMARY` output shows total matches and Critical/High/Medium/Low counts, but does **not** list individual CVE IDs or affected packages. On public repositories, run summaries are world-readable, and publishing a list of unresolved CVEs + package versions amounts to handing attackers a roadmap. Per-CVE detail is available in the JSON/SARIF/table artifact (collaborators only) or, when `upload-sarif: true`, in the Security tab.
+- **Three artifact formats**: each scan produces JSON (Grype-native, used by tooling and `jq` drill-down), SARIF (GitHub code scanning / IDE viewers), and a plain-text table (drop-in readable for reviewers who don't want to touch `jq`). All three are bundled into the same workflow artifact.
 - **Supply chain**: `grype-image` defaults to `anchore/grype:latest` for ease of adoption and DB freshness. For hardened pipelines, override it to a specific digest (`anchore/grype@sha256:...`) and refresh periodically.
 - **SBOM generation**: enabled by default; set `generate-sbom: "false"` to skip when you only need the vulnerability scan.
 - **Multi-arch**: Grype scans the image variant that is loaded into the local Docker daemon. When the runner is `linux/amd64` and you need to scan `linux/arm64`, pull with `--platform linux/arm64` first.

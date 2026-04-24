@@ -40,6 +40,10 @@ inputs:
     description: 'Filename for SARIF report'
     required: false
     default: grype-results.sarif
+  report-table:
+    description: 'Filename for the human-readable table report (always produced).'
+    required: false
+    default: grype-results.txt
   upload-artifact:
     description: 'Upload reports as a workflow artifact'
     required: false
@@ -86,6 +90,9 @@ outputs:
   report_sarif:
     description: 'Path to SARIF report (if generated)'
     value: ${{ steps.final.outputs.report_sarif }}
+  report_table:
+    description: 'Path to the table report (always generated).'
+    value: ${{ steps.final.outputs.report_table }}
 
 runs:
   using: composite
@@ -116,7 +123,7 @@ runs:
         format: ${{ inputs.sbom-format }}
         artifact-name: ${{ inputs.sbom-artifact-name }}
 
-    - name: Run Grype scan (JSON + SARIF)
+    - name: Run Grype scan (JSON + SARIF + table)
       id: grype
       if: ${{ steps.precheck.outputs.image_exists == 'true' }}
       shell: bash
@@ -124,6 +131,7 @@ runs:
         IMAGE: ${{ inputs.image }}
         REPORT_JSON: ${{ inputs.report-json }}
         REPORT_SARIF: ${{ inputs.report-sarif }}
+        REPORT_TABLE: ${{ inputs.report-table }}
         FAIL_ON: ${{ inputs.fail-on }}
         GRYPE_IMAGE: ${{ inputs.grype-image }}
       run: |
@@ -151,6 +159,12 @@ runs:
           -v "$HOME/.cache/grype:/root/.cache/grype" \
           "${GRYPE_IMAGE}" \
           "${IMAGE}" -o sarif > "${REPORT_SARIF}" || true
+
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v "$HOME/.cache/grype:/root/.cache/grype" \
+          "${GRYPE_IMAGE}" \
+          "${IMAGE}" -o table > "${REPORT_TABLE}" || true
 
         echo "exit_code=${scan_rc}" >> "$GITHUB_OUTPUT"
         if [ $scan_rc -eq 0 ]; then
@@ -191,9 +205,13 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}
+        # if-no-files-found: ignore defensively covers the case where Grype
+        # fails mid-run and produces only a subset of the three formats.
         path: |
           ${{ inputs.report-json }}
           ${{ inputs.report-sarif }}
+          ${{ inputs.report-table }}
+        if-no-files-found: ignore
 
     - name: Write scan summary
       if: ${{ inputs.write-summary == 'true' }}
@@ -229,6 +247,7 @@ runs:
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_REPORT_JSON: ${{ inputs.report-json }}
         INPUT_REPORT_SARIF: ${{ inputs.report-sarif }}
+        INPUT_REPORT_TABLE: ${{ inputs.report-table }}
         INPUT_FAIL_BUILD: ${{ inputs.fail-build }}
       run: |
         set -euo pipefail
@@ -260,6 +279,7 @@ runs:
         echo "detail=${detail}" >> "$GITHUB_OUTPUT"
         echo "report_json=${INPUT_REPORT_JSON}" >> "$GITHUB_OUTPUT"
         echo "report_sarif=${INPUT_REPORT_SARIF}" >> "$GITHUB_OUTPUT"
+        echo "report_table=${INPUT_REPORT_TABLE}" >> "$GITHUB_OUTPUT"
 
         if [ "${INPUT_FAIL_BUILD}" = "true" ] && [ "${status}" != "ok" ]; then
           echo "Failing build due to status=${status}: ${detail}" 1>&2
