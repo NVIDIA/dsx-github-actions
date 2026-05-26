@@ -39,6 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-config: /etc/buildkit/buildkitd.toml
+
       - name: Build image locally
         uses: docker/build-push-action@v5
         with:
@@ -67,6 +72,11 @@ jobs:
       security-events: write   # required for SARIF upload
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-config: /etc/buildkit/buildkitd.toml
 
       - name: Build image locally
         uses: docker/build-push-action@v5
