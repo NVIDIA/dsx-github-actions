@@ -31,7 +31,16 @@ if command -v ngc >/dev/null 2>&1; then
 fi
 
 NGCCLI_VERSION="${NGCCLI_VERSION:-4.9.17}"
-download_url="https://api.ngc.nvidia.com/v2/resources/nvidia/ngc-apps/ngc_cli/versions/${NGCCLI_VERSION}/files/ngccli_linux.zip"
+
+# NGC ships a separate CLI build per architecture. ngccli_linux.zip is x86_64-only —
+# running it on an arm64 runner fails with "cannot execute binary file: Exec format error",
+# so select the matching archive for the runner's architecture.
+case "$(uname -m)" in
+  x86_64 | amd64) ngc_cli_file="ngccli_linux.zip" ;;
+  aarch64 | arm64) ngc_cli_file="ngccli_arm64.zip" ;;
+  *) log_error "Unsupported architecture for NGC CLI: $(uname -m)"; exit 1 ;;
+esac
+download_url="https://api.ngc.nvidia.com/v2/resources/nvidia/ngc-apps/ngc_cli/versions/${NGCCLI_VERSION}/files/${ngc_cli_file}"
 work_dir=$(mktemp -d)
 trap 'rm -rf "$work_dir"' EXIT
 
