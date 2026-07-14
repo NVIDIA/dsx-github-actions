@@ -4,7 +4,7 @@ A composite GitHub Action that generates an SBOM (via Syft) and scans a locally-
 
 ## Features
 
-- ✅ SBOM generation with `anchore/sbom-action` (Syft, SPDX-JSON by default)
+- ✅ SBOM generation with `anchore/sbom-action` (Syft, SPDX-JSON by default; SHA-pinned for GHE allowlist)
 - ✅ Vulnerability scan with Anchore Grype (JSON + SARIF outputs)
 - ✅ Top-N CVE summary written to `$GITHUB_STEP_SUMMARY`
 - ✅ Reports uploaded as a workflow artifact
