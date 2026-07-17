@@ -12,6 +12,7 @@ steps:
     uses: NVIDIA/dsx-github-actions/.github/actions/helm-validate@main
     with:
       chart-path: ./charts/my-chart
+      helm-version: v3.18.3
       valueOverrides: |
         global.env=prod
         image.tag=v1.0.0
@@ -24,6 +25,7 @@ steps:
 | Input | Description | Required | Default |
 | --- | --- | --- | --- |
 | `chart-path` | Root directory for the Helm Chart | No | . |
+| `helm-version` | Helm version to install for validation | No | v3.13.2 |
 | `lint` | Whether to lint the Helm Chart | No | true |
 | `template` | Whether to template the Helm Chart | No | true |
 | `extra-repos` | Extra repositories (JSON or "name url" per line) | No | [] |

@@ -20,6 +20,10 @@ inputs:
     description: "Root directory for the Helm Chart"
     required: false
     default: "."
+  helm-version:
+    description: "Helm version to install for validation"
+    required: false
+    default: "v3.13.2"
   lint:
     description: "Whether to lint the Helm Chart"
     required: false
@@ -46,7 +50,8 @@ runs:
     - name: Install Helm
       shell: bash
       run: |
-        "${{ github.action_path }}/../helm-shared/scripts/install-helm.sh"
+        "${{ github.action_path }}/../helm-shared/scripts/install-helm.sh" \
+          "${{ inputs.helm-version }}"
 
     - name: Process Variables
       shell: bash
